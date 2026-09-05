@@ -1,13 +1,29 @@
 model_list:
-  - model_name: local
+  - model_name: laguna-coder-cloud-free
+    litellm_params:
+      model: openrouter/poolside/laguna-s-2.1:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: qwen-coder-cloud-free
+    litellm_params:
+      model: openrouter/qwen/qwen3-coder:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - model_name: qwen-coder-local
     litellm_params:
       model: ollama_chat/qwen3-coder:30b
       api_base: os.environ/OLLAMA_HOST_URL
 
-  - model_name: local-chat
+  - model_name: qwen-chat-local
     litellm_params:
       model: ollama_chat/qwen3.8:27b-q8_0
       api_base: os.environ/OLLAMA_HOST_URL
+
+router_settings:
+  fallbacks:
+    - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-coder-local"]
+    - qwen-coder-cloud-free: ["qwen-coder-local"]
+  num_retries: 2
 
 litellm_settings:
   drop_params: true

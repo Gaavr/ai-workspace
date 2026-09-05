@@ -30,6 +30,7 @@ services:
       OPENAI_API_BASE_URL: http://litellm:4000/v1
       OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
       ENABLE_OLLAMA_API: "false"
+      ENABLE_API_KEY: "true"
     depends_on:
       - litellm
     extra_hosts:

@@ -8,3 +8,4 @@ data/*
 !data/.gitkeep
 *.bak
 *.bak
+prompts.local/

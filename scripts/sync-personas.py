@@ -33,7 +33,7 @@ import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PROMPTS_DIR = ROOT / "prompts"
+PROMPT_DIRS = [ROOT / "prompts", ROOT / "prompts.local"]
 
 
 def load_env():
@@ -105,16 +105,22 @@ def build_model(meta, system_prompt, path):
 
 
 def collect_models():
-    if not PROMPTS_DIR.is_dir():
-        sys.exit(f"Нет каталога {PROMPTS_DIR}")
-
     models = []
-    for path in sorted(PROMPTS_DIR.glob("*.md")):
-        meta, body = parse_frontmatter(path.read_text(encoding="utf-8"), path)
-        models.append(build_model(meta, body, path))
+    seen = {}
+
+    for directory in PROMPT_DIRS:
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.md")):
+            meta, body = parse_frontmatter(path.read_text(encoding="utf-8"), path)
+            model = build_model(meta, body, path)
+            if model["id"] in seen:
+                sys.exit(f"Дубль id '{model['id']}': {seen[model['id']]} и {path}")
+            seen[model["id"]] = path
+            models.append(model)
 
     if not models:
-        sys.exit(f"В {PROMPTS_DIR} не найдено ни одного .md")
+        sys.exit("Не найдено ни одного .md в prompts/ и prompts.local/")
     return models
 
 
