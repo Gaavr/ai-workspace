@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "gateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "http://localhost:4000/v1",
+        "apiKey": "ВСТАВЬ_LITELLM_MASTER_KEY"
+      },
+      "models": {
+        "laguna-coder-cloud-free": {
+          "name": "Laguna (облако)"
+        },
+        "qwen-coder-cloud-free": {
+          "name": "Qwen coder (облако)"
+        },
+        "qwen-coder-local": {
+          "name": "Qwen coder (локально)"
+        },
+        "qwen-chat-local": {
+          "name": "Qwen chat (локально)"
+        }
+      }
+    }
+  },
+  "model": "gateway/laguna-coder-cloud-free"
+}
