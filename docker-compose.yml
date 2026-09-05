@@ -24,7 +24,7 @@ services:
     ports:
       - "3000:8080"
     volumes:
-      - open-webui-data:/app/backend/data
+      - ./data/open-webui:/app/backend/data
     environment:
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY}
       OPENAI_API_BASE_URL: http://litellm:4000/v1
@@ -51,5 +51,3 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-volumes:
-  open-webui-data:

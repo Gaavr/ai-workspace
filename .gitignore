@@ -2,3 +2,9 @@
 models.json
 *.tar.gz
 .DS_Store
+
+# Рабочие данные приложений
+data/*
+!data/.gitkeep
+*.bak
+*.bak
