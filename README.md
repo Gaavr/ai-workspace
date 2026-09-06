@@ -7,7 +7,7 @@
 Два интерфейса — Open WebUI для чатов, OpenCode для агентных задач — обращаются к общему шлюзу LiteLLM. Шлюз маршрутизирует запросы на облачные или локальные модели.
 
 
-![Architecture](docs/architecture.png)
+![Architecture](docs/architecture.drawio.png)
 
 
 Смена провайдера — правка одного YAML. Интерфейсы не затрагиваются.
