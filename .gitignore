@@ -10,3 +10,5 @@ data/*
 *.bak
 prompts.local/
 opencode/opencode.jsonc
+opencode/skill.local/
+opencode/skill.local/

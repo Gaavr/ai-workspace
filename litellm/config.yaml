@@ -22,7 +22,7 @@ model_list:
 router_settings:
   fallbacks:
     - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-chat-local"]
-    - qwen-coder-cloud-free: ["qwen-coder-local"]
+    - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
   num_retries: 2
 
 litellm_settings:
