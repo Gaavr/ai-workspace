@@ -1,70 +1,70 @@
 # ai-workspace
 
-Локальное AI-окружение с подменяемыми провайдерами моделей.
+Local AI environment with swappable model providers.
 
-## Обзор
+## Overview
 
-Два интерфейса — Open WebUI для чатов, OpenCode для агентных задач — обращаются к общему шлюзу LiteLLM. Шлюз маршрутизирует запросы на облачные или локальные модели.
+Two interfaces — Open WebUI for chats, OpenCode for agent tasks — talk to a shared LiteLLM gateway. The gateway routes requests to cloud or local models.
 
-Смена провайдера — правка одного YAML. Интерфейсы не затрагиваются.
+Switching providers means editing one YAML file. Interfaces stay untouched.
 
-## Состав
+## Components
 
-| Сервис | Порт | Роль |
+| Service | Port | Role |
 |---|---|---|
-| Open WebUI | 3000 | чаты, персоны |
-| LiteLLM | 4000 | шлюз, маршрутизация |
-| mcpo | 8000 | MCP через OpenAPI |
-| Ollama | 11434 | локальный инференс, нативно |
+| Open WebUI | 3000 | chats, personas |
+| LiteLLM | 4000 | gateway, routing |
+| mcpo | 8000 | MCP over OpenAPI |
+| Ollama | 11434 | local inference, native |
 
-Ollama ставится вне Docker. В контейнере на macOS нет доступа к Metal.
+Ollama runs outside Docker. Containers on macOS have no Metal access.
 
-## Установка
+## Setup
 
 ```bash
 git clone <repo> && cd ai-workspace
 ./bootstrap.sh
 ```
 
-Скрипт создаёт `.env` и завершается. Заполни ключи, запусти снова:
+The script creates `.env` and exits. Fill in the keys, then run again:
 
 ```bash
 ./bootstrap.sh full
 ```
 
-Профили: `full` (48 ГБ), `light` (16–32 ГБ), `cloud` (без локальных моделей).
+Profiles: `full` (48 GB), `light` (16–32 GB), `cloud` (no local models).
 
-Затем создай аккаунт в Open WebUI, получи API-ключ в Settings → Account, добавь в `.env`, синхронизируй персоны:
+Then create an account in Open WebUI, get an API key from Settings → Account, add it to `.env`, and sync personas:
 
 ```bash
 python3 scripts/sync-personas.py
 ```
 
-## Структура
+## Layout
 
 ```
 ai-workspace/
 ├── docker-compose.yml
 ├── bootstrap.sh
-├── litellm/config.yaml      алиасы моделей, fallback
-├── prompts/                 персоны Open WebUI
-├── prompts.local/           персоны, не в git
+├── litellm/config.yaml      model aliases, fallback
+├── prompts/                 Open WebUI personas
+├── prompts.local/           personas, not in git
 ├── opencode/
-│   ├── opencode.jsonc       провайдер, не в git
-│   ├── agent/               агенты
-│   ├── skill/               скиллы
-│   └── skill.local/         скиллы, не в git
-├── mcpo/config.json         MCP-серверы
+│   ├── opencode.jsonc       provider, not in git
+│   ├── agent/               agents
+│   ├── skill/               skills
+│   └── skill.local/         skills, not in git
+├── mcpo/config.json         MCP servers
 ├── scripts/
 │   ├── sync-personas.py
 │   ├── backup.sh
 │   └── restore.sh
-└── data/                    база Open WebUI, не в git
+└── data/                    Open WebUI database, not in git
 ```
 
-## Алиасы моделей
+## Model aliases
 
-Персоны и агенты ссылаются на алиас, а не на модель:
+Personas and agents reference an alias, not a model:
 
 ```yaml
 model_list:
@@ -74,13 +74,13 @@ model_list:
       api_base: os.environ/OLLAMA_HOST_URL
 ```
 
-Схема имён: `модель-роль-место`. Например `qwen-coder-cloud-free`, `qwen-chat-local`.
+Naming scheme: `model-role-location`. For example `qwen-coder-cloud-free`, `qwen-chat-local`.
 
-Замена модели за алиасом не требует правки персон:
+Replacing the model behind an alias requires no changes to personas:
 
 ```bash
 ollama pull qwen4:30b
-# изменить model: в litellm/config.yaml
+# change model: in litellm/config.yaml
 docker compose restart litellm
 ```
 
@@ -93,76 +93,76 @@ router_settings:
     - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
 ```
 
-Срабатывает на любую ошибку провайдера: исчерпанный лимит, нехватку кредитов, отозванный ключ, отсутствие сети.
+Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network.
 
-## Персоны
+## Personas
 
-Чат с системным промптом и заданной моделью. Файл в `prompts/`:
+A chat with a system prompt and a fixed model. File in `prompts/`:
 
 ```markdown
 ---
 id: algo-coach
-name: Тренер по задачам
+name: Coding Challenge Coach
 base: qwen-coder-cloud-free
 temperature: 0.3
 ---
-Системный промпт.
+System prompt.
 ```
 
-Обязательные поля: `id`, `name`, `base`.
+Required fields: `id`, `name`, `base`.
 
 ```bash
-python3 scripts/sync-personas.py           # добавить и обновить
-python3 scripts/sync-personas.py --prune   # удалить отсутствующие в файлах
-python3 scripts/sync-personas.py --dry-run # показать payload
+python3 scripts/sync-personas.py           # add and update
+python3 scripts/sync-personas.py --prune   # remove those missing from files
+python3 scripts/sync-personas.py --dry-run # print payload only
 ```
 
-Git — источник правды. Правки в интерфейсе перезаписываются.
+Git is the source of truth. Edits made in the interface get overwritten.
 
-## Агенты и скиллы
+## Agents and skills
 
-Только OpenCode.
+OpenCode only.
 
-**Агент** — системный промпт, модель и права доступа. Файл в `opencode/agent/`:
+**Agent** — system prompt, model, and tool permissions. File in `opencode/agent/`:
 
 ```markdown
 ---
-description: Ревью кода
+description: Code review
 mode: subagent
 model: gateway/laguna-coder-cloud-free
 tools:
   write: false
   edit: false
 ---
-Инструкция.
+Instructions.
 ```
 
-Режимы: `primary` (выбирается для сессии), `subagent` (вызывается через `@имя`), `all`.
+Modes: `primary` (selectable for a session), `subagent` (invoked via `@name`), `all`.
 
-**Скилл** — процедура, подключаемая моделью при совпадении с описанием. Папка в `opencode/skill/` с файлом `SKILL.md`:
+**Skill** — a procedure the model pulls in when the task matches its description. A folder in `opencode/skill/` containing `SKILL.md`:
 
 ```markdown
 ---
 name: run-tests
-description: Использовать когда нужно запустить тесты или разобрать падение
+description: Use when tests need to be run or a failure needs investigating
 ---
-Инструкция.
+Instructions.
 ```
 
-Модель постоянно видит только `description`. Тело подгружается при срабатывании.
+The model always sees `description`. The body loads only when the skill triggers.
 
-Изменения применяются после перезапуска OpenCode.
+Changes apply after restarting OpenCode.
 
-## Публичное и приватное
+## Public and private
 
-| Путь | В git |
+| Path | In git |
 |---|---|
-| `prompts/`, `opencode/skill/` | да |
-| `prompts.local/`, `opencode/skill.local/` | нет |
-| `.env`, `data/` | нет |
+| `prompts/`, `opencode/skill/` | yes |
+| `prompts.local/`, `opencode/skill.local/` | no |
+| `.env`, `data/` | no |
 
-Конфиги содержат ссылки на переменные окружения, не значения. Репозиторий публикуем как есть.
+Config files reference environment variables, not values. The repository is publishable as is.
 
-Схема:
+## Diagram
 
 ![Architecture](docs/architecture.drawio.png)
