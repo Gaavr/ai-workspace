@@ -1,127 +1,179 @@
 # ai-workspace
 
-Личное AI-окружение: данные под твоим контролем, провайдеры сменные.
+Локальное AI-окружение с подменяемыми провайдерами моделей.
 
-Топовые модели, пока они доступны. Если доступ пропадёт — работа продолжается
-на открытых моделях с той же историей, теми же промптами и тем же интерфейсом.
+## Обзор
 
-## Архитектура
+Два интерфейса — Open WebUI для чатов, OpenCode для агентных задач — обращаются к общему шлюзу LiteLLM. Шлюз маршрутизирует запросы на облачные или локальные модели.
 
 ```
-Open WebUI (чаты)          OpenCode (агенты)
-        |                          |
-        +----------+---------------+
-                   |
-             LiteLLM шлюз          <- единственное место настройки
-                   |
-   +---------------+---------------+
-   |               |               |
-Claude, GPT    Qwen 480B       Qwen 30B
-               (облако)        (локально)
+![Architecture](docs/architecture.png)
 ```
 
-Деградация в два шага, а не обрыв:
+Смена провайдера — правка одного YAML. Интерфейсы не затрагиваются.
 
-| Что отвалилось | Куда переезжает | Потери |
+## Состав
+
+| Сервис | Порт | Роль |
 |---|---|---|
-| Anthropic | Qwen 480B в облаке | небольшие |
-| Все облака | Qwen 30B локально | заметные, но работает |
+| Open WebUI | 3000 | чаты, персоны |
+| LiteLLM | 4000 | шлюз, маршрутизация |
+| mcpo | 8000 | MCP через OpenAPI |
+| Ollama | 11434 | локальный инференс, нативно |
 
-Переключение — правка `litellm/config.yaml`. Харнессы не трогаешь.
+Ollama ставится вне Docker. В контейнере на macOS нет доступа к Metal.
 
 ## Установка
 
 ```bash
 git clone <repo> && cd ai-workspace
-./bootstrap.sh              # создаст .env и выйдет
-# впиши ключи в .env
-./bootstrap.sh full         # full | light | cloud
+./bootstrap.sh
 ```
 
-Дальше: заведи админский аккаунт в Open WebUI, создай API-ключ
-(Settings → Account → API Keys), положи в `.env`, затем:
+Скрипт создаёт `.env` и завершается. Заполни ключи, запусти снова:
 
 ```bash
-./scripts/sync-personas.py
+./bootstrap.sh full
 ```
 
-### Профили
+Профили: `full` (48 ГБ), `light` (16–32 ГБ), `cloud` (без локальных моделей).
 
-| Профиль | Для чего | Локальные модели |
-|---|---|---|
-| `full` | 48GB+ RAM | qwen3-coder:30b, qwen3:8b |
-| `light` | 16–32GB | qwen3:8b |
-| `cloud` | чужая машина | нет |
+Затем создай аккаунт в Open WebUI, получи API-ключ в Settings → Account, добавь в `.env`, синхронизируй персоны:
+
+```bash
+python3 scripts/sync-personas.py
+```
+
+## Структура
+
+```
+ai-workspace/
+├── docker-compose.yml
+├── bootstrap.sh
+├── litellm/config.yaml      алиасы моделей, fallback
+├── prompts/                 персоны Open WebUI
+├── prompts.local/           персоны, не в git
+├── opencode/
+│   ├── opencode.jsonc       провайдер, не в git
+│   ├── agent/               агенты
+│   ├── skill/               скиллы
+│   └── skill.local/         скиллы, не в git
+├── mcpo/config.json         MCP-серверы
+├── scripts/
+│   ├── sync-personas.py
+│   ├── backup.sh
+│   └── restore.sh
+└── data/                    база Open WebUI, не в git
+```
+
+## Алиасы моделей
+
+Персоны и агенты ссылаются на алиас, а не на модель:
+
+```yaml
+model_list:
+  - model_name: qwen-coder-local
+    litellm_params:
+      model: ollama_chat/qwen3-coder:30b
+      api_base: os.environ/OLLAMA_HOST_URL
+```
+
+Схема имён: `модель-роль-место`. Например `qwen-coder-cloud-free`, `qwen-chat-local`.
+
+Замена модели за алиасом не требует правки персон:
+
+```bash
+ollama pull qwen4:30b
+# изменить model: в litellm/config.yaml
+docker compose restart litellm
+```
+
+## Fallback
+
+```yaml
+router_settings:
+  fallbacks:
+    - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-chat-local"]
+    - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
+```
+
+Срабатывает на любую ошибку провайдера: исчерпанный лимит, нехватку кредитов, отозванный ключ, отсутствие сети.
 
 ## Персоны
 
-Живут в `prompts/*.md` — YAML-frontmatter плюс текст промпта.
-Git единственный источник правды.
+Чат с системным промптом и заданной моделью. Файл в `prompts/`:
 
 ```markdown
 ---
-id: qa-engineer
-name: QA инженер
-base: open-cloud
-description: Пишет автотесты
-temperature: 0.2
+id: algo-coach
+name: Тренер по задачам
+base: qwen-coder-cloud-free
+temperature: 0.3
 ---
-Ты senior QA automation engineer...
+Системный промпт.
 ```
 
-Поле `base` — алиас из `litellm/config.yaml`: `smart`, `open-cloud`, `local`.
-Меняешь алиас в файле — персона переезжает на другую модель.
+Обязательные поля: `id`, `name`, `base`.
 
 ```bash
-./scripts/sync-personas.py            # аддитивно
-./scripts/sync-personas.py --prune    # точная сверка, удаляет лишнее
-./scripts/sync-personas.py --dry-run  # посмотреть payload
-./scripts/sync-personas.py --export   # снять слепок текущего состояния
+python3 scripts/sync-personas.py           # добавить и обновить
+python3 scripts/sync-personas.py --prune   # удалить отсутствующие в файлах
+python3 scripts/sync-personas.py --dry-run # показать payload
 ```
 
-Правки, сделанные руками в UI, скрипт перезапишет. Это осознанно: иначе
-файлы и база разъедутся через месяц.
+Git — источник правды. Правки в интерфейсе перезаписываются.
 
-## История чатов
+## Агенты и скиллы
 
-Через git не переносится — это SQLite внутри Docker-тома.
+Только OpenCode.
+
+**Агент** — системный промпт, модель и права доступа. Файл в `opencode/agent/`:
+
+```markdown
+---
+description: Ревью кода
+mode: subagent
+model: gateway/laguna-coder-cloud-free
+tools:
+  write: false
+  edit: false
+---
+Инструкция.
+```
+
+Режимы: `primary` (выбирается для сессии), `subagent` (вызывается через `@имя`), `all`.
+
+**Скилл** — процедура, подключаемая моделью при совпадении с описанием. Папка в `opencode/skill/` с файлом `SKILL.md`:
+
+```markdown
+---
+name: run-tests
+description: Использовать когда нужно запустить тесты или разобрать падение
+---
+Инструкция.
+```
+
+Модель постоянно видит только `description`. Тело подгружается при срабатывании.
+
+Изменения применяются после перезапуска OpenCode.
+
+## Публичное и приватное
+
+| Путь | В git |
+|---|---|
+| `prompts/`, `opencode/skill/` | да |
+| `prompts.local/`, `opencode/skill.local/` | нет |
+| `.env`, `data/` | нет |
+
+Конфиги содержат ссылки на переменные окружения, не значения. Репозиторий публикуем как есть.
+
+## Бэкапы
+
+История чатов не версионируется — это SQLite в `data/`.
 
 ```bash
-./scripts/backup.sh                  # в ~/backups/ai-workspace
+./scripts/backup.sh                  # в ~/Backups/ai-workspace
 ./scripts/restore.sh <архив.tar.gz>
 ```
 
-Поставь backup в cron, если история важна.
-
-## Что где
-
-| Слой | Переносится | Гарантия |
-|---|---|---|
-| Конфиги и промпты | git | всегда |
-| История чатов | ручной бэкап тома | твоя |
-| Веса моделей | скачаны на диск | не отзовут |
-| Ключи API | менеджер паролей | вручную |
-
-## Грабли
-
-**Ollama только нативно.** В Docker на macOS нет Metal — 30B пойдёт на CPU.
-`bootstrap.sh` ставит его отдельно, в compose его нет.
-
-**`WEBUI_SECRET_KEY` не менять.** Если поменяется, Open WebUI не расшифрует
-сохранённые credentials инструментов и MCP отвалится молча.
-
-**Локальные модели слабы в tool-calling.** В чатах разрыв умеренный,
-в многошаговых агентных задачах — драматический. Уровень `open-cloud`
-существует именно поэтому.
-
-**Ollama на отдельной машине засыпает.** Если инференс на другом хосте,
-пропиши его в `OLLAMA_HOST_URL` и держи `caffeinate`, либо полагайся
-на fallback в LiteLLM.
-
-**Хардкод версий моделей.** Идентификаторы в `litellm/config.yaml`
-устаревают. Проверь актуальные имена у провайдера при первой настройке.
-
-## Проверка запасного пути
-
-Раз в пару недель поработай день на `open-cloud` и полдня на `local`.
-Уровень деградации надо знать заранее, а не выяснять в неудачный момент.
+Cron в 3:00, хранится 14 копий. Кэш моделей исключён.
