@@ -112,6 +112,8 @@ def collect_models():
         if not directory.is_dir():
             continue
         for path in sorted(directory.glob("*.md")):
+            if path.name.startswith("_") or path.name.upper() == "README.MD":
+                continue
             meta, body = parse_frontmatter(path.read_text(encoding="utf-8"), path)
             model = build_model(meta, body, path)
             if model["id"] in seen:
