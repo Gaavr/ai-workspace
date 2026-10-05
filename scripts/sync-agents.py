@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Синхронизация агентов: agents/*.md -> Claude Code, OpenCode, Codex.
+Синхронизация агентов: agents/*.md -> Claude Code, OpenCode, Codex, GigaCode.
 
 Git остаётся единственным источником правды. Правишь файл в agents/, запускаешь
-скрипт, все три инструмента приводятся в соответствие. Сгенерированные файлы
+скрипт, все инструменты приводятся в соответствие. Сгенерированные файлы
 руками не правят — они будут перезаписаны.
 
 Формат файла: YAML-frontmatter + тело промпта.
@@ -17,12 +17,13 @@ Git остаётся единственным источником правды.
 
 readonly: true — агент не правит код, но может писать отчёты в reviews/.
 В OpenCode это запрет на уровне прав, в Claude Code убран инструмент Edit,
-в Codex держится только на тексте промпта.
+в GigaCode — инструмент edit, в Codex держится только на тексте промпта.
 
 Куда пишет:
     Claude Code  ~/.claude/agents/<name>.md
     OpenCode     opencode/agent/<name>.md   (~/.config/opencode/agent — ссылка сюда)
     Codex        ~/.codex/agents/<name>.toml
+    GigaCode     gigacode/agents/<name>.md  (~/.gigacode/agents — ссылка сюда)
 
 Использование:
     ./scripts/sync-agents.py           # записать
@@ -38,6 +39,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 AGENT_DIRS = [ROOT / "agents", ROOT / "agents.local"]
 HOME = pathlib.Path.home()
 REPORT_DIR = "reviews"
+GIGACODE_READONLY_TOOLS = ["read_file", "read_many_files", "grep_search", "glob",
+                           "list_directory", "run_shell_command", "write_file"]
 
 
 def parse_frontmatter(text, path):
@@ -100,6 +103,16 @@ def render_codex(agent):
     ])
 
 
+def render_gigacode(agent):
+    lines = ["---", f"name: {agent['name']}",
+             f"description: {yaml_str(agent['description'])}"]
+    if agent["readonly"]:
+        lines.append("tools:")
+        lines += [f"  - {tool}" for tool in GIGACODE_READONLY_TOOLS]
+    lines += ["---", "", agent["body"], ""]
+    return "\n".join(lines)
+
+
 TARGETS = [
     ("Claude Code", lambda name: HOME / ".claude" / "agents" / f"{name}.md",
      render_claude),
@@ -107,6 +120,8 @@ TARGETS = [
      render_opencode),
     ("Codex", lambda name: HOME / ".codex" / "agents" / f"{name}.toml",
      render_codex),
+    ("GigaCode", lambda name: ROOT / "gigacode" / "agents" / f"{name}.md",
+     render_gigacode),
 ]
 
 

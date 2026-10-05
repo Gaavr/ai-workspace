@@ -47,7 +47,7 @@ ai-workspace/
 ├── litellm/config.yaml      модель для Open WebUI
 ├── prompts/                 Open WebUI personas
 ├── prompts.local/           personas, not in git
-├── agents/                  agents shared by Claude Code, OpenCode, Codex
+├── agents/                  agents shared by Claude Code, OpenCode, Codex, GigaCode
 ├── opencode/
 │   ├── opencode.jsonc       модели и токен для OpenCode, не в git
 │   ├── opencode.example.jsonc шаблон без токена
@@ -109,7 +109,7 @@ Git is the source of truth. Edits made in the interface get overwritten.
 
 ## Shared agents
 
-One file in `agents/` becomes an agent in Claude Code, OpenCode and Codex:
+One file in `agents/` becomes an agent in Claude Code, OpenCode, Codex and GigaCode CLI:
 
 ```markdown
 ---
@@ -130,8 +130,15 @@ python3 scripts/sync-agents.py --dry-run # show what would change
 | Claude Code | `~/.claude/agents/<name>.md` |
 | OpenCode | `opencode/agent/<name>.md` |
 | Codex | `~/.codex/agents/<name>.toml` |
+| GigaCode CLI | `gigacode/agents/<name>.md` |
 
-`readonly: true` — the agent cannot edit code but may write reports to `reviews/`. OpenCode enforces it by permissions, Claude Code drops the Edit tool, Codex relies on the prompt only.
+GigaCode reads `~/.gigacode/agents`, so link it once:
+
+```bash
+mkdir -p ~/.gigacode && ln -s "$PWD/gigacode/agents" ~/.gigacode/agents
+```
+
+`readonly: true` — the agent cannot edit code but may write reports to `reviews/`. OpenCode enforces it by permissions, Claude Code and GigaCode drop the edit tool, Codex relies on the prompt only.
 Edit the file in `agents/`; generated files get overwritten. `agents.local/` is not in git.
 
 ## Agents and skills
