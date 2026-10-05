@@ -4,9 +4,7 @@ Local AI environment with swappable model providers.
 
 ## Overview
 
-Two interfaces — Open WebUI for chats, OpenCode for agent tasks — talk to a shared LiteLLM gateway. The gateway routes requests to cloud or local models.
-
-Switching providers means editing one YAML file. Interfaces stay untouched.
+Open WebUI uses LiteLLM for chats. OpenCode selects models directly from its own config.
 
 ## Components
 
@@ -29,10 +27,10 @@ git clone <repo> && cd ai-workspace
 The script creates `.env` and exits. Fill in the keys, then run again:
 
 ```bash
-./bootstrap.sh full
+./bootstrap.sh
 ```
 
-Profiles: `full` (48 GB), `light` (16–32 GB), `cloud` (no local models).
+Профиль `cloud` пропускает установку Ollama.
 
 Then create an account in Open WebUI, get an API key from Settings → Account, add it to `.env`, and sync personas:
 
@@ -46,54 +44,44 @@ python3 scripts/sync-personas.py
 ai-workspace/
 ├── docker-compose.yml
 ├── bootstrap.sh
-├── litellm/config.yaml      model aliases, fallback
+├── litellm/config.yaml      модель для Open WebUI
 ├── prompts/                 Open WebUI personas
 ├── prompts.local/           personas, not in git
+├── agents/                  agents shared by Claude Code, OpenCode, Codex
 ├── opencode/
-│   ├── opencode.jsonc       provider, not in git
+│   ├── opencode.jsonc       модели и токен для OpenCode, не в git
+│   ├── opencode.example.jsonc шаблон без токена
 │   ├── agent/               agents
 │   ├── skill/               skills
 │   └── skill.local/         skills, not in git
 ├── mcpo/config.json         MCP servers
 ├── scripts/
 │   ├── sync-personas.py
+│   ├── sync-agents.py
 │   ├── backup.sh
 │   └── restore.sh
 └── data/                    Open WebUI database, not in git
 ```
 
-## Model aliases
+## Модели OpenCode
 
-Personas and agents reference an alias, not a model:
+Редактируй только `opencode/opencode.jsonc`. Этот файл уже подключён к OpenCode через
+`~/.config/opencode/opencode.jsonc` и исключён из git. Если файла нет после нового
+клонирования, скопируй `opencode/opencode.example.jsonc`.
 
-```yaml
-model_list:
-  - model_name: qwen-coder-local
-    litellm_params:
-      model: ollama_chat/qwen3-coder:30b
-      api_base: os.environ/OLLAMA_HOST_URL
+В блоке `openrouter.options.apiKey` замени `ВСТАВЬ_ТОКЕН_OPENROUTER` своим токеном.
+OpenCode уже знает каталог моделей OpenRouter — выбери нужную через `/models`.
+Если какой-то модели в списке нет, добавь её точный ID в `openrouter.models`.
+Таких строк может быть сколько угодно:
+
+```json
+"~anthropic/claude-sonnet-latest": {},
+"~google/gemini-flash-latest": {}
 ```
 
-Naming scheme: `model-role-location`. For example `qwen-coder-cloud-free`, `qwen-chat-local`.
-
-Replacing the model behind an alias requires no changes to personas:
-
-```bash
-ollama pull qwen4:30b
-# change model: in litellm/config.yaml
-docker compose restart litellm
-```
-
-## Fallback
-
-```yaml
-router_settings:
-  fallbacks:
-    - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-chat-local"]
-    - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
-```
-
-Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network.
+Токен указывается один раз для всех моделей OpenRouter. Перезапусти OpenCode и
+выбери модель через `/models`. OpenCode запомнит последнюю выбранную модель.
+Локальная Ollama уже указана в том же файле.
 
 ## Personas
 
@@ -103,7 +91,7 @@ A chat with a system prompt and a fixed model. File in `prompts/`:
 ---
 id: algo-coach
 name: Coding Challenge Coach
-base: qwen-coder-cloud-free
+base: qwen3.8:27b-mlx
 temperature: 0.3
 ---
 System prompt.
@@ -119,17 +107,43 @@ python3 scripts/sync-personas.py --dry-run # print payload only
 
 Git is the source of truth. Edits made in the interface get overwritten.
 
+## Shared agents
+
+One file in `agents/` becomes an agent in Claude Code, OpenCode and Codex:
+
+```markdown
+---
+name: functional-tester
+description: When to call it
+readonly: true
+---
+Instructions.
+```
+
+```bash
+python3 scripts/sync-agents.py           # write
+python3 scripts/sync-agents.py --dry-run # show what would change
+```
+
+| Tool | Generated file |
+|---|---|
+| Claude Code | `~/.claude/agents/<name>.md` |
+| OpenCode | `opencode/agent/<name>.md` |
+| Codex | `~/.codex/agents/<name>.toml` |
+
+`readonly: true` — the agent cannot edit code but may write reports to `reviews/`. OpenCode enforces it by permissions, Claude Code drops the Edit tool, Codex relies on the prompt only.
+Edit the file in `agents/`; generated files get overwritten. `agents.local/` is not in git.
+
 ## Agents and skills
 
 OpenCode only.
 
-**Agent** — system prompt, model, and tool permissions. File in `opencode/agent/`:
+**Agent** — system prompt and tool permissions. Agents inherit the model selected in OpenCode:
 
 ```markdown
 ---
 description: Code review
 mode: subagent
-model: gateway/laguna-coder-cloud-free
 tools:
   write: false
   edit: false
@@ -159,9 +173,9 @@ Changes apply after restarting OpenCode.
 |---|---|
 | `prompts/`, `opencode/skill/` | yes |
 | `prompts.local/`, `opencode/skill.local/` | no |
-| `.env`, `data/` | no |
+| `.env`, `opencode/opencode.jsonc`, `data/` | no |
 
-Config files reference environment variables, not values. The repository is publishable as is.
+Токен OpenRouter хранится только в игнорируемом `opencode/opencode.jsonc`.
 
 ## Diagram
 

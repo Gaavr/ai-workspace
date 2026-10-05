@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Разворот окружения на новой машине.
-# Профили: full (48GB+), light (16-32GB), cloud (без локальных моделей)
+# Профиль cloud не устанавливает локальный Ollama.
 set -euo pipefail
 
 PROFILE="${1:-full}"
@@ -35,12 +35,6 @@ if [ "$PROFILE" != "cloud" ]; then
   fi
 
   pgrep -x ollama >/dev/null || { say "Запускаю Ollama"; ollama serve >/dev/null 2>&1 & sleep 3; }
-
-  say "Тяну модели"
-  case "$PROFILE" in
-    full)  ollama pull qwen3-coder:30b; ollama pull qwen3:8b ;;
-    light) ollama pull qwen3:8b ;;
-  esac
 fi
 
 # --- Стек ---

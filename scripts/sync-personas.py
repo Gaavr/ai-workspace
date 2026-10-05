@@ -11,7 +11,7 @@ Open WebUI приводится в соответствие. Правки, сд�
     ---
     id: qa-engineer
     name: QA инженер
-    base: smart
+    base: qwen3.8:27b-mlx
     description: Пишет автотесты для moshub-autotest
     temperature: 0.2
     ---

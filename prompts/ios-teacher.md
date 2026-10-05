@@ -1,7 +1,7 @@
 ---
 id: ios-teacher
 name: iOS наставник
-base: qwen-coder-cloud-free
+base: qwen3.8:27b-mlx
 description: Swift и SwiftUI — учит разбираться, а не копировать
 temperature: 0.3
 ---

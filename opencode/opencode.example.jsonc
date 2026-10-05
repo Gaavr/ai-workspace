@@ -1,28 +1,36 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "enabled_providers": ["openrouter", "ollama"],
   "provider": {
-    "gateway": {
+    "ollama": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "LiteLLM",
+      "name": "Ollama",
       "options": {
-        "baseURL": "http://localhost:4000/v1",
-        "apiKey": "ВСТАВЬ_LITELLM_MASTER_KEY"
+        "baseURL": "http://localhost:11434/v1"
       },
       "models": {
-        "laguna-coder-cloud-free": {
-          "name": "Laguna (облако)"
-        },
-        "qwen-coder-cloud-free": {
-          "name": "Qwen coder (облако)"
-        },
-        "qwen-coder-local": {
-          "name": "Qwen coder (локально)"
-        },
-        "qwen-chat-local": {
-          "name": "Qwen chat (локально)"
+        "qwen3.8:27b-mlx": {
+          "name": "Qwen 3.8 27B MLX"
         }
       }
+    },
+    "openrouter": {
+      "options": {
+        "apiKey": "ВСТАВЬ_ТОКЕН_OPENROUTER"
+      },
+      "whitelist": [
+        "cohere/north-mini-code:free",
+        "poolside/laguna-s-2.1:free",
+        "qwen/qwen3.8-27b:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "z-ai/glm-5.3-flash",
+        "xiaomi/mimo-v2.6-pro",
+        "openai/gpt-6-luna",
+        "openai/gpt-6.1-sol",
+        "openai/gpt-6-astra",
+        "anthropic/claude-sonnet-5.5",
+        "anthropic/claude-opus-5.5"
+      ]
     }
-  },
-  "model": "gateway/laguna-coder-cloud-free"
+  }
 }

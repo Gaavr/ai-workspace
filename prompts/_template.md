@@ -1,7 +1,7 @@
 ---
 id: template-id
 name: Название в дропдауне
-base: qwen-chat-local
+base: qwen3.8:27b-mlx
 description: Короткая подпись под именем
 temperature: 0.5
 ---

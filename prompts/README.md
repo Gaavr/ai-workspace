@@ -18,8 +18,7 @@
 Обязательные: `id`, `name`, `base`.
 Необязательные: `description`, `temperature`, `top_p`, `num_ctx`, `max_tokens`.
 
-`base` — алиас из `litellm/config.yaml`, не имя реальной модели.
-Меняешь модель за алиасом — персона переезжает, файл не трогаешь.
+`base` — id модели из `litellm/config.yaml`.
 
 ## Создать
 

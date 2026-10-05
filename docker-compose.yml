@@ -51,4 +51,3 @@ services:
       JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
