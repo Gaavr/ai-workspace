@@ -4,9 +4,9 @@ Local AI environment with swappable model providers.
 
 ## Overview
 
-Two interfaces — Open WebUI for chats, OpenCode for agent tasks — talk to a shared LiteLLM gateway. The gateway routes requests to cloud or local models.
+Open WebUI for chats talks to a LiteLLM gateway, which routes requests to cloud or local models. Switching providers means editing one YAML file.
 
-Switching providers means editing one YAML file. Interfaces stay untouched.
+Claude Code, Codex and OpenCode share skills, agents, global instructions and MCP servers. The repository holds one source for each, `scripts/sync-agents.py` lays it out into every tool's config.
 
 ## Components
 
@@ -34,6 +34,8 @@ The script creates `.env` and exits. Fill in the keys, then run again:
 
 Profiles: `full` (48 GB), `light` (16–32 GB), `cloud` (no local models).
 
+The script also runs `scripts/sync-agents.py`, which links skills and agents into Claude Code, Codex and OpenCode and generates `mcpo/config.json`.
+
 Then create an account in Open WebUI, get an API key from Settings → Account, add it to `.env`, and sync personas:
 
 ```bash
@@ -49,13 +51,22 @@ ai-workspace/
 ├── litellm/config.yaml      model aliases, fallback
 ├── prompts/                 Open WebUI personas
 ├── prompts.local/           personas, not in git
+├── instructions/AGENTS.md   global rules for all three tools
+├── skills/                  skills
+├── skills.local/            skills, not in git
+├── agents/                  agents, neutral format
+│   └── targets.json         model tier per tool
+├── agents.local/            agents, not in git
+├── mcp/servers.json         MCP servers
 ├── opencode/
 │   ├── opencode.jsonc       provider, not in git
-│   ├── agent/               agents
-│   ├── skill/               skills
-│   └── skill.local/         skills, not in git
-├── mcpo/config.json         MCP servers
+│   └── opencode.example.jsonc
+├── mcpo/config.json         generated, not in git
+├── build/                   generated agents, not in git
 ├── scripts/
+│   ├── sync-agents.py       skills, agents, rules, MCP -> tools
+│   ├── mcp-run.py           starts an MCP server with keys from .env
+│   ├── oc.sh                OpenCode with model keys from .env
 │   ├── sync-personas.py
 │   ├── backup.sh
 │   └── restore.sh
@@ -119,47 +130,61 @@ python3 scripts/sync-personas.py --dry-run # print payload only
 
 Git is the source of truth. Edits made in the interface get overwritten.
 
-## Agents and skills
+## Agents, skills, MCP
 
-OpenCode only.
+Shared by Claude Code, Codex and OpenCode. Edit the source in the repository, then:
 
-**Agent** — system prompt, model, and tool permissions. File in `opencode/agent/`:
+```bash
+python3 scripts/sync-agents.py            # apply
+python3 scripts/sync-agents.py --dry-run  # show changes only
+```
+
+Tools read all of this at startup, so start a new session afterwards.
+
+| Source | Claude Code | Codex | OpenCode |
+|---|---|---|---|
+| `skills/` | `~/.claude/skills/` | `~/.agents/skills/` | reads both |
+| `agents/` | `~/.claude/agents/*.md` | `~/.codex/agents/*.toml` | `~/.config/opencode/agent/*.md` |
+| `instructions/AGENTS.md` | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` |
+| `mcp/servers.json` | `~/.claude.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
+
+Skills and instructions are symlinks into the repository. Agents are generated into `build/` and linked from there. The script recognizes its own links and entries and leaves everything else alone.
+
+**Skill** — a procedure the model pulls in when the task matches its description. Same `SKILL.md` format in all three tools, see [skills/README.md](skills/README.md).
+
+**Agent** — one file, three renderings:
 
 ```markdown
 ---
-description: Code review
-mode: subagent
-model: gateway/laguna-coder-cloud-free
-tools:
-  write: false
-  edit: false
+description: Code review. Changes nothing.
+role: subagent        # primary | subagent
+access: read-only     # read-only | edit
+tier: smart           # key in agents/targets.json
 ---
 Instructions.
 ```
 
-Modes: `primary` (selectable for a session), `subagent` (invoked via `@name`), `all`.
+`tier` maps to a model per tool in `agents/targets.json`. Primary agents go to OpenCode only. Details in [agents/README.md](agents/README.md).
 
-**Skill** — a procedure the model pulls in when the task matches its description. A folder in `opencode/skill/` containing `SKILL.md`:
+**MCP server** — `mcp/servers.json`, Claude Desktop format. Secrets stay in `.env`:
 
-```markdown
----
-name: run-tests
-description: Use when tests need to be run or a failure needs investigating
----
-Instructions.
+```json
+"jira": {
+  "command": "uvx",
+  "args": ["mcp-atlassian"],
+  "env": { "JIRA_URL": "${JIRA_URL}", "JIRA_API_TOKEN": "${JIRA_API_TOKEN}" }
+}
 ```
 
-The model always sees `description`. The body loads only when the skill triggers.
-
-Changes apply after restarting OpenCode.
+Client configs call `scripts/mcp-run.py <name>`, which reads `.env` and hands the server only the variables listed in its `env`. A server with an empty variable is skipped. Open WebUI gets the same servers through mcpo: `mcpo/config.json` is generated with values filled in, since the wrapper is not reachable from the container.
 
 ## Public and private
 
 | Path | In git |
 |---|---|
-| `prompts/`, `opencode/skill/` | yes |
-| `prompts.local/`, `opencode/skill.local/` | no |
-| `.env`, `data/` | no |
+| `prompts/`, `skills/`, `agents/`, `mcp/` | yes |
+| `prompts.local/`, `skills.local/`, `agents.local/` | no |
+| `.env`, `data/`, `build/`, `mcpo/config.json` | no |
 
 Config files reference environment variables, not values. The repository is publishable as is.
 

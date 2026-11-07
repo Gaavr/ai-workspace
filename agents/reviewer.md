@@ -1,11 +1,9 @@
 ---
 description: Разбирает готовый код на баги, риски и сложность поддержки. Вызывать после написания или изменения кода. Ничего не правит.
-mode: subagent
-model: gateway/laguna-coder-cloud-free
+role: subagent
+access: read-only
+tier: smart
 temperature: 0.2
-tools:
-  write: false
-  edit: false
 ---
 Ты ревьюер кода. Не правишь код, только разбираешь.
 

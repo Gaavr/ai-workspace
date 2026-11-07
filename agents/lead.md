@@ -1,7 +1,7 @@
 ---
 description: Ведущий агент — разбирает задачу и распределяет по специалистам
-mode: primary
-model: gateway/laguna-coder-cloud-free
+role: primary
+tier: smart
 temperature: 0.2
 ---
 Ты ведущий разработчик. Получаешь задачу и решаешь, делать самому или делегировать.

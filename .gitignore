@@ -7,8 +7,11 @@ models.json
 data/*
 !data/.gitkeep
 *.bak
-*.bak
 prompts.local/
 opencode/opencode.jsonc
-opencode/skill.local/
-opencode/skill.local/
+
+# Приватное и сгенерированное
+skills.local/
+agents.local/
+build/
+mcpo/config.json

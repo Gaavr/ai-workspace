@@ -44,11 +44,8 @@ services:
       - "8000:8000"
     volumes:
       - ./mcpo/config.json:/app/config/config.json:ro
+    # config.json генерирует scripts/sync-agents.py из mcp/servers.json, ключи уже подставлены.
     command: ["mcpo", "--config", "/app/config/config.json"]
-    environment:
-      JIRA_URL: ${JIRA_URL:-}
-      JIRA_EMAIL: ${JIRA_EMAIL:-}
-      JIRA_API_TOKEN: ${JIRA_API_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

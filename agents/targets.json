@@ -1,0 +1,15 @@
+{
+  "_comment": "Уровень модели агента (tier) -> поля для каждого инструмента. Нет уровня у инструмента — агент берёт модель сессии.",
+  "claude": {
+    "smart": { "model": "inherit" },
+    "fast":  { "model": "haiku" }
+  },
+  "opencode": {
+    "smart": { "model": "gateway/laguna-coder-cloud-free" },
+    "fast":  { "model": "gateway/glm-coder-cloud" }
+  },
+  "codex": {
+    "smart": { "model_reasoning_effort": "high" },
+    "fast":  { "model_reasoning_effort": "low" }
+  }
+}

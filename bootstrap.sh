@@ -43,6 +43,10 @@ if [ "$PROFILE" != "cloud" ]; then
   esac
 fi
 
+# --- Скилы, агенты, MCP для Claude Code, Codex, OpenCode; заодно mcpo/config.json ---
+say "Раскладываю скилы, агентов и MCP"
+python3 scripts/sync-agents.py
+
 # --- Стек ---
 say "Поднимаю Open WebUI, LiteLLM, mcpo"
 docker compose up -d

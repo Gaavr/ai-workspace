@@ -1,0 +1,14 @@
+{
+  "_comment": "MCP-серверы для Claude Code, Codex, OpenCode и Open WebUI (mcpo). Значения ${VAR} берутся из .env. Сервер с пустой переменной пропускается.",
+  "mcpServers": {
+    "jira": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "JIRA_URL": "${JIRA_URL}",
+        "JIRA_USERNAME": "${JIRA_EMAIL}",
+        "JIRA_API_TOKEN": "${JIRA_API_TOKEN}"
+      }
+    }
+  }
+}

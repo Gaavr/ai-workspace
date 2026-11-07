@@ -1,7 +1,8 @@
 ---
 description: Пишет и запускает автотесты для существующего кода. Вызывать когда нужно покрытие тестами или проверка работоспособности.
-mode: subagent
-model: gateway/laguna-coder-cloud-free
+role: subagent
+access: edit
+tier: smart
 temperature: 0.2
 ---
 Ты пишешь автотесты.
