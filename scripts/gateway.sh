@@ -11,6 +11,7 @@ VENV="$ROOT/build/litellm-venv"
 UV_VENV="$ROOT/build/uv-venv"
 PID_FILE="$ROOT/build/litellm.pid"
 LOG="$ROOT/build/litellm.log"
+CONFIG="$ROOT/build/litellm/config.yaml"
 PORT="${LITELLM_PORT:-4000}"
 
 running() { curl -sf "http://localhost:$PORT/health/liveliness" >/dev/null 2>&1; }
@@ -44,7 +45,9 @@ start() {
     # В старом .env адрес Ollama для контейнера, а шлюз теперь на хосте.
     OLLAMA_HOST_URL="${OLLAMA_HOST_URL:-http://localhost:11434}"
     export OLLAMA_HOST_URL="${OLLAMA_HOST_URL/host.docker.internal/localhost}"
-    nohup "$VENV/bin/litellm" --config "$ROOT/litellm/config.yaml" --port "$PORT" >"$LOG" 2>&1 &
+    # Алиасы с пустым ключом в .env выпадают вместе со ссылками в fallbacks.
+    "$VENV/bin/python" "$ROOT/scripts/gateway-config.py" "$ROOT/litellm/config.yaml" "$CONFIG"
+    nohup "$VENV/bin/litellm" --config "$CONFIG" --port "$PORT" >"$LOG" 2>&1 &
     echo $! >"$PID_FILE"
   )
   for _ in $(seq 1 60); do

@@ -36,16 +36,25 @@ model_list:
       max_input_tokens: 1048576
       max_output_tokens: 32768
 
-  # --- На будущее: напрямую у провайдера, ключ в .env.
-  # - model_name: glm-coder-zai
-  #   litellm_params:
-  #     model: zai/glm-5.3-flash
-  #     api_key: os.environ/ZAI_API_KEY
-  #
-  # - model_name: deepseek-coder-direct
-  #   litellm_params:
-  #     model: deepseek/deepseek-v4.1-flash
-  #     api_key: os.environ/DEEPSEEK_API_KEY
+  # --- Та же модель напрямую у автора: резерв, если OpenRouter недоступен.
+  # Без ключа в .env алиас выпадает (scripts/gateway-config.py, sync-agents.py), цепочка
+  # идёт сразу на локальную. Оплата за использование, не подписка.
+  # Имена моделей сверить с /models провайдера, когда появится ключ.
+  - model_name: glm-coder-zai
+    litellm_params:
+      model: zai/glm-5.3-flash
+      api_key: os.environ/ZAI_API_KEY
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 32768
+
+  - model_name: deepseek-coder-direct
+    litellm_params:
+      model: deepseek/deepseek-v4-flash
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 32768
 
   # --- Локально, без интернета: последнее звено всех цепочек.
   # Ollama с внешнего SSD (scripts/ollama.sh), модель — litellm/ollama/gpt-oss-20b.Modelfile.
@@ -59,15 +68,17 @@ model_list:
       max_output_tokens: 4096
       supports_function_calling: true
 
-
 router_settings:
   # Бесплатные падают только на бесплатные: платная модель без спроса не включается.
+  # Платные — на ту же модель у другого провайдера, не на другую платную.
   # Каждая цепочка кончается локальной моделью, она работает без интернета.
   fallbacks:
     - nemotron-coder-cloud-free: ["north-coder-cloud-free", "gpt-oss-coder-local"]
     - north-coder-cloud-free: ["nemotron-coder-cloud-free", "gpt-oss-coder-local"]
-    - glm-coder-cloud: ["deepseek-coder-cloud", "gpt-oss-coder-local"]
-    - deepseek-coder-cloud: ["glm-coder-cloud", "gpt-oss-coder-local"]
+    - glm-coder-cloud: ["glm-coder-zai", "gpt-oss-coder-local"]
+    - deepseek-coder-cloud: ["deepseek-coder-direct", "gpt-oss-coder-local"]
+    - glm-coder-zai: ["gpt-oss-coder-local"]
+    - deepseek-coder-direct: ["gpt-oss-coder-local"]
   num_retries: 2
 
 litellm_settings:

@@ -540,14 +540,22 @@ def sync_codex_mcp(active):
     write_text(CODEX_TOML, text)
 
 
-def gateway_models():
-    """Алиасы из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info."""
+def gateway_models(env):
+    """Алиасы из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info.
+
+    Алиас с пустым ключом (api_key: os.environ/VAR) пропускается — то же правило,
+    что у scripts/gateway-config.py, на котором стартует шлюз.
+    """
     lines = [line for line in LITELLM_CONFIG.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
     text = "\n".join(lines)
     section = re.search(r"^model_list:\n(.*?)(?=^\S|\Z)", text, re.M | re.S)
     models = {}
     for block in re.split(r"^\s*- model_name:", section.group(1) if section else "", flags=re.M)[1:]:
         name = block.split("\n", 1)[0].strip()
+        key = re.search(r"^\s*api_key:\s*os\.environ/(\w+)", block, re.M)
+        if key and not (os.environ.get(key.group(1)) or env.get(key.group(1))):
+            print(f"  gateway/{name}: выключен, в .env пусто: {key.group(1)}")
+            continue
         model = {"name": name, "tool_call": True}
         limit = {}
         for key, field in (("max_input_tokens", "context"), ("max_output_tokens", "output")):
@@ -560,9 +568,9 @@ def gateway_models():
     return models
 
 
-def sync_opencode_config(active, targets):
+def sync_opencode_config(active, targets, env):
     # Глобальные opencode.json и opencode.jsonc OpenCode сливает: здесь шлюз и MCP, в .jsonc — личные правки.
-    models = gateway_models()
+    models = gateway_models(env)
     config = {
         "$schema": "https://opencode.ai/config.json",
         "provider": {
@@ -613,7 +621,7 @@ def sync_mcp():
     state = load_state()
     claude = sync_claude_mcp(active, state)
     sync_codex_mcp(active)
-    sync_opencode_config(active, json.loads(TARGETS.read_text(encoding="utf-8")))
+    sync_opencode_config(active, json.loads(TARGETS.read_text(encoding="utf-8")), env)
     sync_mcpo(active, env)
     if not DRY_RUN:
         MCP_STATE.parent.mkdir(parents=True, exist_ok=True)

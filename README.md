@@ -157,8 +157,10 @@ Adding or removing an alias also needs `python3 scripts/sync-agents.py` and an O
 router_settings:
   fallbacks:
     - nemotron-coder-cloud-free: ["north-coder-cloud-free", "gpt-oss-coder-local"]
-    - glm-coder-cloud: ["deepseek-coder-cloud", "gpt-oss-coder-local"]
+    - glm-coder-cloud: ["glm-coder-zai", "gpt-oss-coder-local"]
 ```
+
+Paid aliases fall back to the same model at another provider: GLM via OpenRouter → GLM at z.ai, DeepSeek via OpenRouter → DeepSeek direct, then the local model. The direct aliases are pay-per-use API, not subscriptions. An alias whose `api_key` variable is empty in `.env` is switched off: `scripts/gateway-config.py` drops it and its fallback references before the gateway starts (`build/litellm/config.yaml`), `sync-agents.py` hides it in OpenCode. Fill in `ZAI_API_KEY` or `DEEPSEEK_API_KEY`, run `scripts/gateway.sh restart` and `sync-agents.py`, and it turns on.
 
 Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter. Free aliases fall back only to free ones and the local model, so a paid model never kicks in unasked. Every chain ends on the local model.
 
