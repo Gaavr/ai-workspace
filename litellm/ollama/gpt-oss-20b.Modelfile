@@ -1,0 +1,7 @@
+# gpt-oss-20b из GGUF, который уже лежит на SSD в папке моделей LM Studio. Без скачивания.
+#   scripts/ollama.sh create gpt-oss-20b-ssd -f litellm/ollama/gpt-oss-20b.Modelfile
+# Ollama копирует веса в своё хранилище на SSD (AI Models/ollama-models), ~12 ГБ.
+FROM "/Volumes/Samsung T7 Shield/AI Models/lmstudio-community/gpt-oss-20b-GGUF/gpt-oss-20b-MXFP4.gguf"
+
+# Системный промпт OpenCode с агентами занимает ~10 тыс. токенов, меньше не хватит.
+PARAMETER num_ctx 16384

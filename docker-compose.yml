@@ -13,7 +13,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OLLAMA_HOST_URL: ${OLLAMA_HOST_URL}
+      OLLAMA_HOST_URL: http://host.docker.internal:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

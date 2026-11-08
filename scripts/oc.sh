@@ -22,7 +22,8 @@ for name in "${ALLOWED[@]}"; do
 done
 unset value
 
-# Модели gateway идут через LiteLLM: поднимаем его, если ещё не запущен.
-"$ROOT/scripts/gateway.sh" status >/dev/null || "$ROOT/scripts/gateway.sh" start
+# Модели gateway идут через LiteLLM и Ollama: поднимаем то, что не запущено.
+# Предупреждения (нет SSD и т. п.) идут в stderr и остаются видны.
+"$ROOT/scripts/gateway.sh" start >/dev/null
 
 exec opencode "$@"

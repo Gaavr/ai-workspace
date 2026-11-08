@@ -13,7 +13,7 @@ Claude Code, Codex and OpenCode share skills, agents, global instructions and MC
 | Service | Port | Role | Runs |
 |---|---|---|---|
 | LiteLLM | 4000 | gateway, routing, fallback | native, `scripts/gateway.sh` |
-| Ollama | 11434 | local inference | native, optional |
+| Ollama | 11434 | local inference, last link of every fallback chain | native, from the external SSD, `scripts/ollama.sh` |
 | Open WebUI | 3000 | browser chats, personas | Docker, optional |
 | mcpo | 8000 | MCP over OpenAPI for Open WebUI | Docker, optional |
 
@@ -51,7 +51,29 @@ scripts/gateway.sh restart  # after editing litellm/config.yaml
 scripts/gateway.sh logs
 ```
 
-The first start installs `uv` from PyPI and through it Python 3.12 with `litellm[proxy]`: dependencies have no builds for the newest system Python yet. Keys come from `.env`. `scripts/oc.sh` starts the gateway itself when it is down.
+The first start installs `uv` from PyPI and through it Python 3.12 with `litellm[proxy]`: dependencies have no builds for the newest system Python yet. Keys come from `.env`. `start` and `stop` also start and stop Ollama. `scripts/oc.sh` starts both when they are down.
+
+## Local models
+
+Ollama (MIT) runs from the external SSD, nothing goes into `/Applications`, no autostart:
+
+| What | Where |
+|---|---|
+| binary | `$AI_KIT/runtime/ollama/<version>/` |
+| models | `$AI_SSD/AI Models/ollama-models/` |
+| model recipe | `litellm/ollama/gpt-oss-20b.Modelfile`, GGUF already on the SSD |
+
+```bash
+scripts/ollama.sh list                     # any Ollama command, with the SSD paths set
+scripts/ollama.sh ps                       # what is loaded and how much is on the GPU
+scripts/ollama.sh stop gpt-oss-20b-ssd     # unload the model, the server keeps running
+```
+
+`gpt-oss-coder-local` (gpt-oss-20b, 16k context) is the last link of every chain: it answers with no internet and no account. On a 16 GB Mac it is the ceiling: 12 GB of weights, 91% on the GPU, ~17 tokens/s, about 1 GB of RAM left. Agents call tools on it, but follow instructions weaker than cloud models.
+
+Without the SSD the gateway still starts, prints that local models are unavailable, and the chain ends with a connection error.
+
+LM Studio is not used: it is closed source, and its defaults (`mlock`, four parallel slots) froze this Mac on the same model. Its installer stays in the offline kit.
 
 ## Layout
 
@@ -59,7 +81,9 @@ The first start installs `uv` from PyPI and through it Python 3.12 with `litellm
 ai-workspace/
 ├── docker-compose.yml
 ├── bootstrap.sh
-├── litellm/config.yaml      model aliases, fallback
+├── litellm/
+│   ├── config.yaml          model aliases, fallback
+│   └── ollama/              Modelfiles for local models
 ├── prompts/                 Open WebUI personas
 ├── prompts.local/           personas, not in git
 ├── openspec/                specs and planned changes, artifacts in Russian
@@ -78,7 +102,8 @@ ai-workspace/
 ├── scripts/
 │   ├── sync-agents.py       skills, agents, rules, MCP -> tools
 │   ├── mcp-run.py           starts an MCP server with keys from .env
-│   ├── gateway.sh           LiteLLM without Docker
+│   ├── gateway.sh           LiteLLM without Docker, starts Ollama too
+│   ├── ollama.sh            Ollama from the external SSD
 │   ├── oc.sh                OpenCode with model keys from .env
 │   ├── sync-personas.py
 │   ├── backup.sh
@@ -119,11 +144,11 @@ Adding or removing an alias also needs `python3 scripts/sync-agents.py` and an O
 ```yaml
 router_settings:
   fallbacks:
-    - nemotron-coder-cloud-free: ["north-coder-cloud-free"]
-    - glm-coder-cloud: ["deepseek-coder-cloud"]
+    - nemotron-coder-cloud-free: ["north-coder-cloud-free", "gpt-oss-coder-local"]
+    - glm-coder-cloud: ["deepseek-coder-cloud", "gpt-oss-coder-local"]
 ```
 
-Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter. Free aliases fall back only to free ones, so a paid model never kicks in unasked.
+Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter. Free aliases fall back only to free ones and the local model, so a paid model never kicks in unasked. Every chain ends on the local model.
 
 ## Personas
 

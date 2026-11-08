@@ -3,9 +3,10 @@
 ## Где что лежит
 ```
 /Volumes/Samsung T7 Shield/
-├── AI Models/                      папка моделей LM Studio, как есть
+├── AI Models/                      старые модели, раскладка LM Studio
 │   ├── lmstudio-community/gpt-oss-20b-GGUF/gpt-oss-20b-MXFP4.gguf
-│   └── Ollama/                     OLLAMA_MODELS
+│   ├── Ollama                      битый ярлык Finder, не трогаем
+│   └── ollama-models/              OLLAMA_MODELS
 └── Apps/AI/ai-workspace-kit/
     ├── runtime/ollama/<версия>/    распакованный ollama-darwin.tgz, запускается отсюда
     └── installers/                 ollama-darwin.tgz, LM-Studio-*.dmg
@@ -33,7 +34,10 @@ Ollama копирует веса в своё хранилище — ещё ~12 �
 шлюз стартует без локального рантайма. Запрос на `gpt-oss-coder-local` тогда кончается
 понятной ошибкой соединения в конце цепочки.
 
-## LM Studio
-Папка моделей задаётся в настройках приложения (My Models → путь) на `AI Models`.
-Сервер поднимается вручную: `lms server start` (порт 1234). Перед этим Ollama-модель
-выгрузить: `ollama stop gpt-oss-20b-ssd`.
+## Почему без LM Studio
+Проверено 08.11.2026. Ollama грузит gpt-oss-20b за 33 с, 91% слоёв на GPU, 9% на CPU,
+~17 ток/с, вызов инструментов работает. LM Studio 0.4.28 запускает ту же модель через
+`llama-server` с `--load-mode mmap+mlock` и `--parallel 4`: 12 ГБ закреплены в RAM без права
+вытеснения плюс четыре кеша контекста. На 16 ГБ свободная память упала до ~100 МБ,
+Mac перестал отвечать. Плюс закрытый код против правила «открытое предпочтительнее».
+Ollama одна закрывает задачу, второй рантайм на этой машине — только риск.

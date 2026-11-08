@@ -25,18 +25,17 @@ gpt-oss-20b SHALL импортироваться в Ollama из GGUF, уже л�
 - **WHEN** выполняется `scripts/oc.sh run --agent lead -m gateway/gpt-oss-coder-local "…"`
 - **THEN** агент отвечает и может вызвать инструмент
 
-### Requirement: Закрытый рантайм только запасной
-LM Studio SHALL NOT стоять в цепочках fallback и SHALL NOT запускаться при входе в систему.
-Он SHALL читать модели из той же папки на SSD, без копий.
+### Requirement: Одна загруженная модель
+На машине с 16 ГБ SHALL работать один локальный рантайм. Закрытый рантайм SHALL NOT
+ставиться; его установщик MAY лежать в офлайн-комплекте.
 
-#### Scenario: Выбор LM Studio вручную
-- **GIVEN** в LM Studio запущен сервер
-- **WHEN** выполняется `scripts/oc.sh -m gateway/gpt-oss-coder-lmstudio`
-- **THEN** OpenCode работает через LM Studio
+#### Scenario: Проверка после установки
+- **WHEN** перечисляются приложения и объекты входа
+- **THEN** LM Studio нет, а модель загружает только Ollama
 
 ### Requirement: Старые установщики не удаляются насовсем
 Заменённые установщики SHALL перемещаться в корзину, а не удаляться.
 
 #### Scenario: Замена установщиков
-- **WHEN** на SSD кладутся новые Ollama и LM Studio
+- **WHEN** на SSD кладётся новая Ollama
 - **THEN** старые LM Studio 0.3.16, 0.3.35 и Ollama.app 0.6.8 лежат в корзине тома
