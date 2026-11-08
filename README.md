@@ -4,20 +4,20 @@ Local AI environment with swappable model providers.
 
 ## Overview
 
-Open WebUI for chats talks to a LiteLLM gateway, which routes requests to cloud or local models. Switching providers means editing one YAML file.
+A LiteLLM gateway routes requests to cloud or local models under stable aliases. Switching providers means editing one YAML file. The gateway runs natively, no Docker: `scripts/gateway.sh`.
 
 Claude Code, Codex and OpenCode share skills, agents, global instructions and MCP servers. The repository holds one source for each, `scripts/sync-agents.py` lays it out into every tool's config.
 
 ## Components
 
-| Service | Port | Role |
-|---|---|---|
-| Open WebUI | 3000 | chats, personas |
-| LiteLLM | 4000 | gateway, routing |
-| mcpo | 8000 | MCP over OpenAPI |
-| Ollama | 11434 | local inference, native |
+| Service | Port | Role | Runs |
+|---|---|---|---|
+| LiteLLM | 4000 | gateway, routing, fallback | native, `scripts/gateway.sh` |
+| Ollama | 11434 | local inference | native, optional |
+| Open WebUI | 3000 | browser chats, personas | Docker, optional |
+| mcpo | 8000 | MCP over OpenAPI for Open WebUI | Docker, optional |
 
-Ollama runs outside Docker. Containers on macOS have no Metal access.
+Ollama runs outside Docker. Containers on macOS have no Metal access. `docker-compose.yml` still carries its own LiteLLM on the same port: stop `gateway.sh` before `docker compose up`.
 
 ## Setup
 
@@ -42,6 +42,17 @@ Then create an account in Open WebUI, get an API key from Settings → Account, 
 python3 scripts/sync-personas.py
 ```
 
+## Gateway without Docker
+
+```bash
+scripts/gateway.sh start    # first run installs LiteLLM into build/litellm-venv
+scripts/gateway.sh status
+scripts/gateway.sh restart  # after editing litellm/config.yaml
+scripts/gateway.sh logs
+```
+
+The first start installs `uv` from PyPI and through it Python 3.12 with `litellm[proxy]`: dependencies have no builds for the newest system Python yet. Keys come from `.env`. `scripts/oc.sh` starts the gateway itself when it is down.
+
 ## Layout
 
 ```
@@ -59,13 +70,14 @@ ai-workspace/
 ├── agents.local/            agents, not in git
 ├── mcp/servers.json         MCP servers
 ├── opencode/
-│   ├── opencode.jsonc       provider, not in git
+│   ├── opencode.jsonc       personal overrides, not in git
 │   └── opencode.example.jsonc
 ├── mcpo/config.json         generated, not in git
 ├── build/                   generated agents, not in git
 ├── scripts/
 │   ├── sync-agents.py       skills, agents, rules, MCP -> tools
 │   ├── mcp-run.py           starts an MCP server with keys from .env
+│   ├── gateway.sh           LiteLLM without Docker
 │   ├── oc.sh                OpenCode with model keys from .env
 │   ├── sync-personas.py
 │   ├── backup.sh
@@ -79,32 +91,38 @@ Personas and agents reference an alias, not a model:
 
 ```yaml
 model_list:
-  - model_name: qwen-coder-local
+  - model_name: nemotron-coder-cloud-free
     litellm_params:
-      model: ollama_chat/qwen3-coder:30b
-      api_base: os.environ/OLLAMA_HOST_URL
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 32768
 ```
 
-Naming scheme: `model-role-location`. For example `qwen-coder-cloud-free`, `qwen-chat-local`.
+Naming scheme: `model-role-location[-free]`. For example `nemotron-coder-cloud-free`, `glm-coder-cloud`, `qwen-coder-local`.
 
-Replacing the model behind an alias requires no changes to personas:
+`sync-agents.py` builds OpenCode's `gateway` provider from `model_list`: every alias becomes `gateway/<alias>`, `model_info` gives the context limits. The default model and agent tiers come from `agents/targets.json`. Other providers and local Ollama models are in the file as commented templates.
+
+Replacing the model behind an alias requires no changes to personas or agents:
 
 ```bash
-ollama pull qwen4:30b
 # change model: in litellm/config.yaml
-docker compose restart litellm
+scripts/gateway.sh restart
 ```
+
+Adding or removing an alias also needs `python3 scripts/sync-agents.py` and an OpenCode restart.
 
 ## Fallback
 
 ```yaml
 router_settings:
   fallbacks:
-    - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-chat-local"]
-    - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
+    - nemotron-coder-cloud-free: ["north-coder-cloud-free"]
+    - glm-coder-cloud: ["deepseek-coder-cloud"]
 ```
 
-Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network.
+Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter. Free aliases fall back only to free ones, so a paid model never kicks in unasked.
 
 ## Personas
 
@@ -114,7 +132,7 @@ A chat with a system prompt and a fixed model. File in `prompts/`:
 ---
 id: algo-coach
 name: Coding Challenge Coach
-base: qwen-coder-cloud-free
+base: nemotron-coder-cloud-free
 temperature: 0.3
 ---
 System prompt.
@@ -129,6 +147,14 @@ python3 scripts/sync-personas.py --dry-run # print payload only
 ```
 
 Git is the source of truth. Edits made in the interface get overwritten.
+
+`sync-agents.py` hands the same personas to the coding tools. `base` stays with Open WebUI, the tools use the session model or `tier`:
+
+| Tool | Persona becomes | How to pick it |
+|---|---|---|
+| Claude Code | output style `~/.claude/output-styles/<id>.md` | Settings → Claude Code → Output style, or `/config` in the CLI |
+| Codex | profile `~/.codex/<id>.config.toml` | `codex -p <id>` |
+| OpenCode | primary agent | Tab in the TUI, `--agent <id>` |
 
 ## Agents, skills, MCP
 
@@ -145,8 +171,10 @@ Tools read all of this at startup, so start a new session afterwards.
 |---|---|---|---|
 | `skills/` | `~/.claude/skills/` | `~/.agents/skills/` | reads both |
 | `agents/` | `~/.claude/agents/*.md` | `~/.codex/agents/*.toml` | `~/.config/opencode/agent/*.md` |
+| `prompts/` | `~/.claude/output-styles/*.md` | `~/.codex/*.config.toml` | `~/.config/opencode/agent/*.md` |
 | `instructions/AGENTS.md` | `~/.claude/CLAUDE.md` | `~/.codex/AGENTS.md` | `~/.config/opencode/AGENTS.md` |
 | `mcp/servers.json` | `~/.claude.json` | `~/.codex/config.toml` | `~/.config/opencode/opencode.json` |
+| `litellm/config.yaml` | — | — | `gateway` provider in `~/.config/opencode/opencode.json` |
 
 Skills and instructions are symlinks into the repository. Agents are generated into `build/` and linked from there. The script recognizes its own links and entries and leaves everything else alone.
 

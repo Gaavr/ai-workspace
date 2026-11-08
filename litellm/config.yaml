@@ -1,28 +1,68 @@
+# Единственное место с моделями. Алиас: модель-роль-где[-free].
+# sync-agents.py собирает из model_name и model_info список моделей gateway для OpenCode,
+# поэтому новый алиас появляется там после sync-agents.py и перезапуска шлюза.
 model_list:
-  - model_name: laguna-coder-cloud-free
+  # --- Бесплатные через OpenRouter. Пропадают без предупреждения, поэтому fallback ниже.
+  - model_name: nemotron-coder-cloud-free
     litellm_params:
-      model: openrouter/poolside/laguna-s-2.1:free
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 32768
 
-  - model_name: qwen-coder-cloud-free
+  - model_name: north-coder-cloud-free
     litellm_params:
-      model: openrouter/qwen/qwen3-coder:free
+      model: openrouter/cohere/north-mini-code:free
       api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      max_input_tokens: 256000
+      max_output_tokens: 32768
 
-  - model_name: qwen-coder-local
+  # --- Платные, но дешёвые: уровень fast, лёгкие задачи [лёгкая] из PROCESS.md. Вышла новая версия — меняется только model.
+  - model_name: glm-coder-cloud
     litellm_params:
-      model: ollama_chat/qwen3-coder:30b
-      api_base: os.environ/OLLAMA_HOST_URL
+      model: openrouter/z-ai/glm-5.3-flash
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 32768
 
-  - model_name: qwen-chat-local
+  - model_name: deepseek-coder-cloud
     litellm_params:
-      model: ollama_chat/qwen3.8:27b-q8_0
-      api_base: os.environ/OLLAMA_HOST_URL
+      model: openrouter/deepseek/deepseek-v4.1-flash
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 32768
+
+  # --- На будущее: напрямую у провайдера, ключ в .env.
+  # - model_name: glm-coder-zai
+  #   litellm_params:
+  #     model: zai/glm-5.3-flash
+  #     api_key: os.environ/ZAI_API_KEY
+  #
+  # - model_name: deepseek-coder-direct
+  #   litellm_params:
+  #     model: deepseek/deepseek-v4.1-flash
+  #     api_key: os.environ/DEEPSEEK_API_KEY
+
+  # --- На будущее: локально через Ollama. Под 16 ГБ — модели до ~8B.
+  # - model_name: qwen-coder-local
+  #   litellm_params:
+  #     model: ollama_chat/qwen3-coder:30b
+  #     api_base: os.environ/OLLAMA_HOST_URL
+  #   model_info:
+  #     max_input_tokens: 262144
+  #     max_output_tokens: 32768
 
 router_settings:
+  # Бесплатные падают только на бесплатные: платная модель без спроса не включается.
   fallbacks:
-    - laguna-coder-cloud-free: ["qwen-coder-cloud-free", "qwen-chat-local"]
-    - qwen-coder-cloud-free: ["qwen-coder-local", "qwen-chat-local"]
+    - nemotron-coder-cloud-free: ["north-coder-cloud-free"]
+    - north-coder-cloud-free: ["nemotron-coder-cloud-free"]
+    - glm-coder-cloud: ["deepseek-coder-cloud"]
+    - deepseek-coder-cloud: ["glm-coder-cloud"]
   num_retries: 2
 
 litellm_settings:

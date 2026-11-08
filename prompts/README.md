@@ -43,6 +43,20 @@ python3 scripts/sync-personas.py
 Git — источник правды. Поправил персону в интерфейсе, запустил скрипт — правка потеряна.
 Правь файл.
 
+## В Claude Code, Codex и OpenCode
+
+`scripts/sync-agents.py` раскладывает те же файлы по инструментам кода. `base` им не нужен:
+модель берётся из сессии или из `tier` (`agents/targets.json`).
+
+| Инструмент | Чем становится | Как выбрать |
+|---|---|---|
+| Claude Code | output style | Settings → Claude Code → Output style, в CLI `/config` |
+| Codex | профиль `~/.codex/<id>.config.toml` | `codex -p <id>` |
+| OpenCode | основной агент | Tab, `oc.sh --agent <id>` |
+
+`id` — латиница в нижнем регистре, цифры, дефис: из него собираются имена файлов.
+Поля только для одного инструмента — с префиксом, как у агентов: `claude.keep-coding-instructions: true`.
+
 ## Чем отличается от скиллов
 
 Персона — кто ты, активна весь диалог, выбираешь сам.

@@ -7,6 +7,9 @@ Git остаётся источником правды, скрипт раскл�
     skills/, skills.local/      -> симлинки в ~/.claude/skills и ~/.agents/skills
                                    (OpenCode читает обе папки сам, дубли по имени схлопывает)
     agents/, agents.local/      -> build/<инструмент>/ -> симлинки в папки агентов
+    prompts/, prompts.local/    -> персоны: основной агент OpenCode, output style Claude Code,
+                                   профиль Codex (~/.codex/<id>.config.toml, codex -p <id>)
+    litellm/config.yaml         -> провайдер gateway в ~/.config/opencode/opencode.json
     instructions/AGENTS.md      -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
     mcp/servers.json            -> ~/.claude.json, ~/.codex/config.toml, ~/.config/opencode/opencode.json,
                                    mcpo/config.json
@@ -33,7 +36,10 @@ BUILD = ROOT / "build"
 
 SKILL_DIRS = [ROOT / "skills", ROOT / "skills.local"]
 AGENT_DIRS = [ROOT / "agents", ROOT / "agents.local"]
+PERSONA_DIRS = [ROOT / "prompts", ROOT / "prompts.local"]
 TARGETS = ROOT / "agents" / "targets.json"
+LITELLM_CONFIG = ROOT / "litellm" / "config.yaml"
+GATEWAY_URL = "http://localhost:4000/v1"
 INSTRUCTIONS = ROOT / "instructions" / "AGENTS.md"
 MCP_SERVERS = ROOT / "mcp" / "servers.json"
 MCP_RUN = ROOT / "scripts" / "mcp-run.py"
@@ -43,6 +49,10 @@ AGENT_LINKS = {
     "claude": HOME / ".claude" / "agents",
     "opencode": HOME / ".config" / "opencode" / "agent",
     "codex": HOME / ".codex" / "agents",
+}
+PERSONA_LINKS = {
+    "claude": HOME / ".claude" / "output-styles",
+    "codex": HOME / ".codex",
 }
 INSTRUCTION_LINKS = [
     HOME / ".claude" / "CLAUDE.md",
@@ -103,12 +113,14 @@ def link(dest, src):
     dest.symlink_to(src)
 
 
-def prune(directory, keep):
-    """Удаляет из directory наши симлинки, которых нет в keep."""
+def prune(directory, keep, inside=None):
+    """Удаляет из directory наши симлинки, которых нет в keep. С inside — только ведущие в эту папку."""
     if not directory.is_dir() or is_ours(directory):
         return
     for path in sorted(directory.iterdir()):
-        if path.name not in keep and is_ours(path):
+        if path.name in keep or not is_ours(path):
+            continue
+        if inside is None or os.readlink(path).startswith(str(inside) + os.sep):
             act(f"unlink {short(path)}")
             if not DRY_RUN:
                 path.unlink()
@@ -352,31 +364,96 @@ RENDERERS = {
 }
 
 
-def sync_agents():
+def publish(out_dir, files, directory, inside=None):
+    """Пишет files в out_dir и ставит на них ссылки в directory. Лишнее из обоих мест убирает."""
+    if out_dir.is_dir() and not DRY_RUN:
+        for stale in out_dir.iterdir():
+            if stale.name not in files:
+                stale.unlink()
+    for filename, text in files.items():
+        write_text(out_dir / filename, text)
+
+    unlink_dir_link(directory)
+    for filename in files:
+        link(directory / filename, out_dir / filename)
+    prune(directory, files, inside)
+
+
+def sync_agents(personas):
     targets = json.loads(TARGETS.read_text(encoding="utf-8"))
     agents = load_agents()
+    for name, (meta, body) in personas.items():
+        if name in agents:
+            raise SystemExit(f"персона {name}: агент с таким именем уже есть")
+        agents[name] = (persona_agent(meta), body)
+
     for tool, (render, ext) in RENDERERS.items():
-        out_dir = BUILD / tool / "agents"
         files = {}
         for name, (meta, body) in agents.items():
             # Основной агент выбирается только в OpenCode. В остальных он стал бы подагентом.
             if meta.get("role") == "primary" and tool != "opencode":
                 continue
             files[name + ext] = render(meta, body, targets)
-
-        if out_dir.is_dir() and not DRY_RUN:
-            for stale in out_dir.iterdir():
-                if stale.name not in files:
-                    stale.unlink()
-        for filename, text in files.items():
-            write_text(out_dir / filename, text)
-
-        directory = AGENT_LINKS[tool]
-        unlink_dir_link(directory)
-        for filename in files:
-            link(directory / filename, out_dir / filename)
-        prune(directory, files)
+        publish(BUILD / tool / "agents", files, AGENT_LINKS[tool])
         print(f"агенты {tool}: {', '.join(n.rsplit('.', 1)[0] for n in files) or 'нет'}")
+
+
+# --- персоны ---
+
+def load_personas():
+    """Персоны Open WebUI из prompts/. Для инструментов кода это режим разговора, а не подагент."""
+    personas = {}
+    for base in PERSONA_DIRS:
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob("*.md")):
+            if path.name.startswith(("_", ".")) or path.name == "README.md":
+                continue
+            raw, body = split_frontmatter(path.read_text(encoding="utf-8"), path)
+            meta = parse_meta(raw, path)
+            for required in ("id", "name"):
+                if required not in meta:
+                    raise SystemExit(f"{short(path)}: нет поля {required}")
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", str(meta["id"])):
+                raise SystemExit(f"{short(path)}: id только из латиницы в нижнем регистре, цифр и дефиса")
+            meta.setdefault("description", meta["name"])
+            personas[meta["id"]] = (meta, body)
+    return personas
+
+
+def persona_agent(meta):
+    """Персона как основной агент. base — алиас LiteLLM для Open WebUI, инструментам он не нужен."""
+    agent = {key: value for key, value in meta.items() if key not in ("id", "name", "base")}
+    agent.update(name=meta["id"], role="primary")
+    return agent
+
+
+def render_claude_style(meta, body):
+    # Без инструкций для кода Claude Code остаётся собеседником в роли персоны, инструменты при этом не теряет.
+    front = {"name": meta["name"], "description": meta["description"], "keep-coding-instructions": False}
+    deep_merge(front, nest(tool_overrides(meta, "claude")))
+    return "---\n" + to_yaml(front) + "---\n" + body
+
+
+def render_codex_profile(meta, body, targets):
+    fields = tier_fields(persona_agent(meta), "codex", targets)
+    fields.update(tool_overrides(meta, "codex"))
+    lines = [f"# Персона «{meta['name']}», запуск: codex -p {meta['id']}", "# Собрано scripts/sync-agents.py из prompts/, не править."]
+    lines += [f"{key} = {toml_value(value)}" for key, value in fields.items()]
+    lines.append("developer_instructions = " + toml_multiline(body))
+    return "\n".join(lines) + "\n"
+
+
+def sync_personas(personas):
+    targets = json.loads(TARGETS.read_text(encoding="utf-8"))
+    styles = {pid + ".md": render_claude_style(meta, body) for pid, (meta, body) in personas.items()}
+    publish(BUILD / "claude" / "output-styles", styles, PERSONA_LINKS["claude"])
+
+    # В ~/.codex лежат и чужие профили, и наша ссылка на AGENTS.md: чистим только ссылки на профили персон.
+    out_dir = BUILD / "codex" / "profiles"
+    profiles = {pid + ".config.toml": render_codex_profile(meta, body, targets) for pid, (meta, body) in personas.items()}
+    publish(out_dir, profiles, PERSONA_LINKS["codex"], inside=out_dir)
+    print(f"персоны: {', '.join(personas) or 'нет'}")
 
 
 # --- MCP ---
@@ -463,9 +540,47 @@ def sync_codex_mcp(active):
     write_text(CODEX_TOML, text)
 
 
-def sync_opencode_mcp(active):
-    # Глобальные opencode.json и opencode.jsonc OpenCode сливает: провайдеры остаются в .jsonc, MCP здесь.
-    config = {"$schema": "https://opencode.ai/config.json"}
+def gateway_models():
+    """Алиасы из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info."""
+    lines = [line for line in LITELLM_CONFIG.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    text = "\n".join(lines)
+    section = re.search(r"^model_list:\n(.*?)(?=^\S|\Z)", text, re.M | re.S)
+    models = {}
+    for block in re.split(r"^\s*- model_name:", section.group(1) if section else "", flags=re.M)[1:]:
+        name = block.split("\n", 1)[0].strip()
+        model = {"name": name, "tool_call": True}
+        limit = {}
+        for key, field in (("max_input_tokens", "context"), ("max_output_tokens", "output")):
+            found = re.search(rf"^\s*{key}:\s*(\d+)", block, re.M)
+            if found:
+                limit[field] = int(found.group(1))
+        if limit:
+            model["limit"] = limit
+        models[name] = model
+    return models
+
+
+def sync_opencode_config(active, targets):
+    # Глобальные opencode.json и opencode.jsonc OpenCode сливает: здесь шлюз и MCP, в .jsonc — личные правки.
+    models = gateway_models()
+    config = {
+        "$schema": "https://opencode.ai/config.json",
+        "provider": {
+            "gateway": {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": "LiteLLM",
+                "options": {"baseURL": GATEWAY_URL, "apiKey": "{env:LITELLM_MASTER_KEY}"},
+                "models": models,
+            }
+        },
+    }
+    default = targets.get("opencode", {}).get("smart", {}).get("model")
+    if default:
+        config["model"] = default
+    for tier, fields in targets.get("opencode", {}).items():
+        alias = fields.get("model", "").removeprefix("gateway/")
+        if fields.get("model", "").startswith("gateway/") and alias not in models:
+            warn(f"agents/targets.json: opencode.{tier} ссылается на {alias}, его нет в litellm/config.yaml")
     if active:
         config["mcp"] = {name: client_entry(name, server, "opencode") for name, server in active.items()}
     out = BUILD / "opencode" / "opencode.json"
@@ -498,7 +613,7 @@ def sync_mcp():
     state = load_state()
     claude = sync_claude_mcp(active, state)
     sync_codex_mcp(active)
-    sync_opencode_mcp(active)
+    sync_opencode_config(active, json.loads(TARGETS.read_text(encoding="utf-8")))
     sync_mcpo(active, env)
     if not DRY_RUN:
         MCP_STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -508,13 +623,15 @@ def sync_mcp():
 
 def main():
     global DRY_RUN
-    parser = argparse.ArgumentParser(description="Раскладывает скилы, агентов, инструкции и MCP по Claude Code, Codex и OpenCode")
+    parser = argparse.ArgumentParser(description="Раскладывает скилы, агентов, персоны, инструкции и MCP по Claude Code, Codex и OpenCode")
     parser.add_argument("--dry-run", action="store_true", help="только показать изменения")
     DRY_RUN = parser.parse_args().dry_run
 
+    personas = load_personas()
     sync_skills()
     sync_instructions()
-    sync_agents()
+    sync_agents(personas)
+    sync_personas(personas)
     sync_mcp()
 
 

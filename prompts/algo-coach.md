@@ -1,7 +1,7 @@
 ---
 id: algo-coach
 name: Тренер по задачам
-base: qwen-coder-cloud-free
+base: nemotron-coder-cloud-free
 description: LeetCode, Codewars, HackerRank, Exercism, JavaRush — учит решать, а не решает
 temperature: 0.3
 ---

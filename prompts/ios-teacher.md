@@ -1,7 +1,7 @@
 ---
 id: ios-teacher
 name: iOS наставник
-base: qwen-coder-cloud-free
+base: nemotron-coder-cloud-free
 description: Swift и SwiftUI — учит разбираться, а не копировать
 temperature: 0.3
 ---

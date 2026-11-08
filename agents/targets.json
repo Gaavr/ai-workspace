@@ -5,7 +5,7 @@
     "fast":  { "model": "haiku" }
   },
   "opencode": {
-    "smart": { "model": "gateway/laguna-coder-cloud-free" },
+    "smart": { "model": "gateway/nemotron-coder-cloud-free" },
     "fast":  { "model": "gateway/glm-coder-cloud" }
   },
   "codex": {
