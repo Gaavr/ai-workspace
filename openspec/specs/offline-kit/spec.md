@@ -1,4 +1,10 @@
-## ADDED Requirements
+# offline-kit Specification
+
+## Purpose
+Офлайн-комплект на внешнем SSD поднимает окружение на чистом Mac без npm, PyPI и GitHub:
+если реестры пакетов или хостинг кода закроют, всё нужное уже лежит рядом с моделями.
+
+## Requirements
 
 ### Requirement: Подъём без сети
 С комплектом на SSD окружение SHALL подниматься на чистом Mac на Apple Silicon без доступа
