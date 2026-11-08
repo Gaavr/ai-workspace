@@ -2,7 +2,8 @@
 # LiteLLM без Docker: venv в build/, ключи из .env, лог и pid тоже в build/.
 #   gateway.sh start | stop | restart | status | logs
 # start и stop заодно поднимают и гасят Ollama с внешнего SSD (scripts/ollama.sh).
-# Первый start ставит LiteLLM сам: uv из PyPI, через него Python 3.12 и litellm[proxy].
+# Первый start ставит LiteLLM сам: из офлайн-комплекта на SSD, а без него — из сети
+# (uv из PyPI, через него Python 3.12 и litellm[proxy]).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
@@ -16,7 +17,14 @@ running() { curl -sf "http://localhost:$PORT/health/liveliness" >/dev/null 2>&1;
 
 install() {
   [ -x "$VENV/bin/litellm" ] && return
-  echo "Ставлю LiteLLM в build/litellm-venv"
+  # Комплект первым: установка воспроизводима и заодно проверяет сам комплект.
+  if "$ROOT/scripts/kit.sh" has-litellm; then
+    echo "Ставлю LiteLLM в build/litellm-venv из офлайн-комплекта"
+    "$ROOT/scripts/kit.sh" install-litellm "$VENV" && return
+    echo "Из комплекта не встало, ставлю из сети" >&2
+    rm -rf "$VENV"
+  fi
+  echo "Ставлю LiteLLM в build/litellm-venv из сети"
   [ -x "$UV_VENV/bin/uv" ] || { python3 -m venv "$UV_VENV" && "$UV_VENV/bin/pip" install -q uv; }
   # Под свежий системный Python у зависимостей LiteLLM нет готовых сборок, uv берёт 3.12 сам.
   "$UV_VENV/bin/uv" venv -q "$VENV" --python 3.12

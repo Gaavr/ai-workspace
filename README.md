@@ -75,6 +75,17 @@ Without the SSD the gateway still starts, prints that local models are unavailab
 
 LM Studio is not used: it is closed source, and its defaults (`mlock`, four parallel slots) froze this Mac on the same model. Its installer stays in the offline kit.
 
+## Offline kit
+
+Everything needed to bring the setup up on a clean Apple Silicon Mac with no npm, PyPI or GitHub lives on the external SSD in `$AI_KIT` (`Apps/AI/ai-workspace-kit`): a git bundle of this repo, the OpenCode binary (runs without Node), Python 3.12, LiteLLM wheels, Ollama. Step-by-step bring-up is in [docs/offline-kit.md](docs/offline-kit.md), which is also the kit's own README.
+
+```bash
+scripts/kit.sh refresh   # rebuild what changed: OpenCode, uv, Python, LiteLLM, repo bundle
+scripts/kit.sh check     # verify every file against MANIFEST (SHA-256)
+```
+
+Run `refresh` after updating OpenCode or LiteLLM and after commits worth keeping. `gateway.sh` installs LiteLLM from the kit when the SSD is connected and from the network otherwise.
+
 ## Layout
 
 ```
@@ -104,6 +115,7 @@ ai-workspace/
 │   ├── mcp-run.py           starts an MCP server with keys from .env
 │   ├── gateway.sh           LiteLLM without Docker, starts Ollama too
 │   ├── ollama.sh            Ollama from the external SSD
+│   ├── kit.sh               offline kit: refresh, check, install
 │   ├── oc.sh                OpenCode with model keys from .env
 │   ├── sync-personas.py
 │   ├── backup.sh
