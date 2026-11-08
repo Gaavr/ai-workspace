@@ -1,4 +1,10 @@
-## ADDED Requirements
+# repo-mirror Specification
+
+## Purpose
+Вторая копия проектов на внешнем SSD: полные рабочие папки с историей и незакоммиченной
+работой. GitHub перестаёт быть единственной копией вне этого Mac.
+
+## Requirements
 
 ### Requirement: Вторая копия проектов на SSD
 `scripts/sync-projects.sh` SHALL копировать папки `Apps`, `ai`, `YT` из `~/Projects`
