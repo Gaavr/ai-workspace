@@ -22,24 +22,22 @@ Ollama runs outside Docker. Containers on macOS have no Metal access. `docker-co
 ## Setup
 
 ```bash
-git clone <repo> && cd ai-workspace
-./bootstrap.sh
+git clone https://github.com/Gaavr/ai-workspace.git ~/Projects/ai/ai-workspace
+cd ~/Projects/ai/ai-workspace
+cp .env.example .env              # fill in keys; LITELLM_MASTER_KEY: sk-$(openssl rand -hex 24)
+npm i -g opencode-ai              # or the binary from the offline kit
+scripts/gateway.sh start          # LiteLLM, plus Ollama from the SSD when it is connected
+python3 scripts/sync-agents.py    # skills, agents, personas, rules, MCP into all three tools
+scripts/oc.sh                     # OpenCode through the gateway
 ```
 
-The script creates `.env` and exits. Fill in the keys, then run again:
+No network: follow [docs/offline-kit.md](docs/offline-kit.md), everything comes from the SSD.
+
+Open WebUI is optional and the only part that needs Docker. Stop the native gateway first, the compose file carries its own LiteLLM on port 4000:
 
 ```bash
-./bootstrap.sh full
-```
-
-Profiles: `full` (48 GB), `light` (16–32 GB), `cloud` (no local models).
-
-The script also runs `scripts/sync-agents.py`, which links skills and agents into Claude Code, Codex and OpenCode and generates `mcpo/config.json`.
-
-Then create an account in Open WebUI, get an API key from Settings → Account, add it to `.env`, and sync personas:
-
-```bash
-python3 scripts/sync-personas.py
+scripts/gateway.sh stop && docker compose up -d
+python3 scripts/sync-personas.py  # after creating an admin account and OPENWEBUI_API_KEY in .env
 ```
 
 ## Gateway without Docker
@@ -102,7 +100,6 @@ Whole working folders with `.git`, uncommitted and untracked files, in the same 
 ```
 ai-workspace/
 ├── docker-compose.yml
-├── bootstrap.sh
 ├── litellm/
 │   ├── config.yaml          model aliases, fallback
 │   └── ollama/              Modelfiles for local models
