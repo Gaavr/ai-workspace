@@ -86,6 +86,17 @@ scripts/kit.sh check     # verify every file against MANIFEST (SHA-256)
 
 Run `refresh` after updating OpenCode or LiteLLM and after commits worth keeping. `gateway.sh` installs LiteLLM from the kit when the SSD is connected and from the network otherwise.
 
+## Project copy on the SSD
+
+GitHub is the only copy of the projects outside this Mac. A second one lives on the SSD:
+
+```bash
+scripts/sync-projects.sh --dry-run   # what would change
+scripts/sync-projects.sh             # ~/Projects/{Apps,ai,YT} -> CodeProjects/Projects/
+```
+
+Whole working folders with `.git`, uncommitted and untracked files, in the same layout as `~/Projects`. Secrets (`.env`, `mcpo/config.json`, `*.p8`, `*.p12`, `*.pem`, `*.key`, `*.mobileprovision`) and build output (`DerivedData`, `build/`, `node_modules/`, agent worktrees) stay out. Deleted files and previous versions of overwritten ones go to `CodeProjects/Projects-deleted/<timestamp>/` instead of vanishing. Older copies elsewhere in `CodeProjects/` are never touched.
+
 ## Layout
 
 ```
@@ -116,6 +127,7 @@ ai-workspace/
 │   ├── gateway.sh           LiteLLM without Docker, starts Ollama too
 │   ├── ollama.sh            Ollama from the external SSD
 │   ├── kit.sh               offline kit: refresh, check, install
+│   ├── sync-projects.sh     copy of ~/Projects on the SSD
 │   ├── oc.sh                OpenCode with model keys from .env
 │   ├── sync-personas.py
 │   ├── backup.sh
