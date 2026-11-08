@@ -85,4 +85,6 @@ litellm_settings:
   drop_params: true
 
 general_settings:
+  # Нативный шлюз (gateway.sh) слушает только 127.0.0.1 и ставит сюда постоянный
+  # sk-local-gateway — это не секрет. LiteLLM из docker-compose получает ключ из .env.
   master_key: os.environ/LITELLM_MASTER_KEY

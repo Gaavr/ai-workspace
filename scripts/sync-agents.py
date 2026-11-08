@@ -11,6 +11,7 @@ Git остаётся источником правды, скрипт раскл�
                                    профиль Codex (~/.codex/<id>.config.toml, codex -p <id>)
     litellm/config.yaml         -> провайдер gateway в ~/.config/opencode/opencode.json
     instructions/AGENTS.md      -> ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.config/opencode/AGENTS.md
+    litellm/ + targets.json     -> провайдер gateway и профили smart/fast в Codex (codex -p smart)
     mcp/servers.json            -> ~/.claude.json, ~/.codex/config.toml, ~/.config/opencode/opencode.json,
                                    mcpo/config.json
 
@@ -39,7 +40,9 @@ AGENT_DIRS = [ROOT / "agents", ROOT / "agents.local"]
 PERSONA_DIRS = [ROOT / "prompts", ROOT / "prompts.local"]
 TARGETS = ROOT / "agents" / "targets.json"
 LITELLM_CONFIG = ROOT / "litellm" / "config.yaml"
-GATEWAY_URL = "http://localhost:4000/v1"
+GATEWAY_URL = "http://127.0.0.1:4000/v1"
+# Шлюз слушает только 127.0.0.1, ключ — постоянная заглушка, не секрет (то же в gateway.sh).
+GATEWAY_KEY = "sk-local-gateway"
 INSTRUCTIONS = ROOT / "instructions" / "AGENTS.md"
 MCP_SERVERS = ROOT / "mcp" / "servers.json"
 MCP_RUN = ROOT / "scripts" / "mcp-run.py"
@@ -444,16 +447,50 @@ def render_codex_profile(meta, body, targets):
     return "\n".join(lines) + "\n"
 
 
-def sync_personas(personas):
+def render_codex_tier(tier, alias, model):
+    lines = [
+        f"# Уровень «{tier}» через шлюз, запуск: codex -p {tier}",
+        "# Собрано scripts/sync-agents.py из agents/targets.json и litellm/config.yaml, не править.",
+        'model_provider = "gateway"',
+        f"model = {toml_value(alias)}",
+    ]
+    if "context" in model.get("limit", {}):
+        lines.append(f"model_context_window = {model['limit']['context']}")
+    return "\n".join(lines) + "\n"
+
+
+def codex_tier_profiles(targets, env):
+    """Профили Codex на уровни OpenCode, чья модель — алиас шлюза: codex -p smart."""
+    models = gateway_models(env, quiet=True)
+    profiles = {}
+    for tier, fields in targets.get("opencode", {}).items():
+        model = fields.get("model", "")
+        if not model.startswith("gateway/"):
+            continue
+        alias = model.removeprefix("gateway/")
+        if alias not in models:
+            warn(f"профиль Codex {tier}: алиаса {alias} нет в шлюзе, пропускаю")
+            continue
+        profiles[tier] = render_codex_tier(tier, alias, models[alias])
+    return profiles
+
+
+def sync_personas(personas, env):
     targets = json.loads(TARGETS.read_text(encoding="utf-8"))
     styles = {pid + ".md": render_claude_style(meta, body) for pid, (meta, body) in personas.items()}
     publish(BUILD / "claude" / "output-styles", styles, PERSONA_LINKS["claude"])
 
-    # В ~/.codex лежат и чужие профили, и наша ссылка на AGENTS.md: чистим только ссылки на профили персон.
+    # В ~/.codex лежат и чужие профили, и наша ссылка на AGENTS.md: чистим только ссылки на свои профили.
     out_dir = BUILD / "codex" / "profiles"
     profiles = {pid + ".config.toml": render_codex_profile(meta, body, targets) for pid, (meta, body) in personas.items()}
+    tiers = codex_tier_profiles(targets, env)
+    for tier, text in tiers.items():
+        if tier in personas:
+            raise SystemExit(f"профиль Codex {tier}: персона с таким id уже есть")
+        profiles[tier + ".config.toml"] = text
     publish(out_dir, profiles, PERSONA_LINKS["codex"], inside=out_dir)
     print(f"персоны: {', '.join(personas) or 'нет'}")
+    print(f"профили Codex на шлюз: {', '.join(tiers) or 'нет'}")
 
 
 # --- MCP ---
@@ -522,12 +559,25 @@ def sync_claude_mcp(active, state):
     return written
 
 
-def sync_codex_mcp(active):
+def sync_codex_config(active):
+    """Свой блок в ~/.codex/config.toml: провайдер шлюза и MCP-серверы."""
     text = CODEX_TOML.read_text(encoding="utf-8") if CODEX_TOML.exists() else ""
     text = re.sub(
         r"\n*" + re.escape(CODEX_BEGIN) + r".*?" + re.escape(CODEX_END) + r"\n?", "\n", text, flags=re.S
     ).rstrip("\n") + "\n"
     blocks = []
+    if re.search(r"^\[model_providers\.gateway\]", text, re.M):
+        warn("~/.codex/config.toml: провайдер gateway уже настроен вручную, пропускаю")
+    else:
+        # Codex 0.167 принимает только Responses API, LiteLLM переводит его в chat сам.
+        # Ключ — заглушка шлюза на 127.0.0.1, не секрет.
+        blocks.append("\n".join([
+            "[model_providers.gateway]",
+            'name = "LiteLLM (ai-workspace)"',
+            f"base_url = {toml_value(GATEWAY_URL)}",
+            'wire_api = "responses"',
+            f'http_headers = {{ Authorization = {toml_value("Bearer " + GATEWAY_KEY)} }}',
+        ]))
     for name, server in active.items():
         if re.search(r"^\[mcp_servers\." + re.escape(name) + r"\]", text, re.M):
             warn(f"~/.codex/config.toml: сервер {name} уже настроен вручную, пропускаю")
@@ -540,7 +590,7 @@ def sync_codex_mcp(active):
     write_text(CODEX_TOML, text)
 
 
-def gateway_models(env):
+def gateway_models(env, quiet=False):
     """Алиасы из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info.
 
     Алиас с пустым ключом (api_key: os.environ/VAR) пропускается — то же правило,
@@ -554,7 +604,8 @@ def gateway_models(env):
         name = block.split("\n", 1)[0].strip()
         key = re.search(r"^\s*api_key:\s*os\.environ/(\w+)", block, re.M)
         if key and not (os.environ.get(key.group(1)) or env.get(key.group(1))):
-            print(f"  gateway/{name}: выключен, в .env пусто: {key.group(1)}")
+            if not quiet:
+                print(f"  gateway/{name}: выключен, в .env пусто: {key.group(1)}")
             continue
         model = {"name": name, "tool_call": True}
         limit = {}
@@ -577,7 +628,7 @@ def sync_opencode_config(active, targets, env):
             "gateway": {
                 "npm": "@ai-sdk/openai-compatible",
                 "name": "LiteLLM",
-                "options": {"baseURL": GATEWAY_URL, "apiKey": "{env:LITELLM_MASTER_KEY}"},
+                "options": {"baseURL": GATEWAY_URL, "apiKey": GATEWAY_KEY},
                 "models": models,
             }
         },
@@ -615,12 +666,11 @@ def sync_mcpo(active, env):
     write_text(MCPO_JSON, json.dumps({"mcpServers": servers}, indent=2, ensure_ascii=False) + "\n", mode=0o600)
 
 
-def sync_mcp():
-    env = load_env()
+def sync_mcp(env):
     active = active_servers(env)
     state = load_state()
     claude = sync_claude_mcp(active, state)
-    sync_codex_mcp(active)
+    sync_codex_config(active)
     sync_opencode_config(active, json.loads(TARGETS.read_text(encoding="utf-8")), env)
     sync_mcpo(active, env)
     if not DRY_RUN:
@@ -636,11 +686,12 @@ def main():
     DRY_RUN = parser.parse_args().dry_run
 
     personas = load_personas()
+    env = load_env()
     sync_skills()
     sync_instructions()
     sync_agents(personas)
-    sync_personas(personas)
-    sync_mcp()
+    sync_personas(personas, env)
+    sync_mcp(env)
 
 
 if __name__ == "__main__":

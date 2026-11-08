@@ -24,7 +24,7 @@ Ollama runs outside Docker. Containers on macOS have no Metal access. `docker-co
 ```bash
 git clone https://github.com/Gaavr/ai-workspace.git ~/Projects/ai/ai-workspace
 cd ~/Projects/ai/ai-workspace
-cp .env.example .env              # fill in keys; LITELLM_MASTER_KEY: sk-$(openssl rand -hex 24)
+cp .env.example .env              # fill in provider keys
 npm i -g opencode-ai              # or the binary from the offline kit
 scripts/gateway.sh start          # LiteLLM, plus Ollama from the SSD when it is connected
 python3 scripts/sync-agents.py    # skills, agents, personas, rules, MCP into all three tools
@@ -48,6 +48,8 @@ scripts/gateway.sh status
 scripts/gateway.sh restart  # after editing litellm/config.yaml
 scripts/gateway.sh logs
 ```
+
+The gateway listens on `127.0.0.1` only, so nothing on the network can reach it. Its key is a fixed placeholder, `sk-local-gateway`, not a secret: the real key in `.env` never protected against local programs, since they can read `.env`, and the address now protects against the network. The `.env` key is left for the LiteLLM in `docker-compose.yml`.
 
 The first start installs `uv` from PyPI and through it Python 3.12 with `litellm[proxy]`: dependencies have no builds for the newest system Python yet. Keys come from `.env`. `start` and `stop` also start and stop Ollama. `scripts/oc.sh` starts both when they are down.
 
@@ -131,6 +133,18 @@ ai-workspace/
 │   └── restore.sh
 └── data/                    Open WebUI database, not in git
 ```
+
+## Codex through the gateway
+
+`sync-agents.py` adds a `gateway` provider to its block in `~/.codex/config.toml` (Responses API, which LiteLLM translates for every model) and a profile per OpenCode tier from `agents/targets.json`:
+
+```bash
+codex -p smart      # gateway/nemotron-coder-cloud-free, same model as smart agents in OpenCode
+codex -p fast       # gateway/glm-coder-cloud
+codex -p algo-coach # a persona, on the usual OpenAI model
+```
+
+Change a tier's model in `targets.json`, run `sync-agents.py`, and Codex moves together with the OpenCode agents. Your own profiles in `~/.codex/` are left alone.
 
 ## Model aliases
 

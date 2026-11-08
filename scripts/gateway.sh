@@ -13,8 +13,9 @@ PID_FILE="$ROOT/build/litellm.pid"
 LOG="$ROOT/build/litellm.log"
 CONFIG="$ROOT/build/litellm/config.yaml"
 PORT="${LITELLM_PORT:-4000}"
+GATEWAY_KEY="sk-local-gateway"  # то же значение в scripts/sync-agents.py
 
-running() { curl -sf "http://localhost:$PORT/health/liveliness" >/dev/null 2>&1; }
+running() { curl -sf "http://127.0.0.1:$PORT/health/liveliness" >/dev/null 2>&1; }
 
 install() {
   [ -x "$VENV/bin/litellm" ] && return
@@ -35,7 +36,7 @@ install() {
 start() {
   # Локальная модель — последнее звено всех цепочек: без неё шлюз работает, но без страховки.
   "$ROOT/scripts/ollama.sh" start || echo "Ollama не поднялась, шлюз стартует без локальных моделей" >&2
-  if running; then echo "Шлюз уже работает: http://localhost:$PORT"; return; fi
+  if running; then echo "Шлюз уже работает: http://127.0.0.1:$PORT"; return; fi
   install
   (
     set -a
@@ -45,13 +46,18 @@ start() {
     # В старом .env адрес Ollama для контейнера, а шлюз теперь на хосте.
     OLLAMA_HOST_URL="${OLLAMA_HOST_URL:-http://localhost:11434}"
     export OLLAMA_HOST_URL="${OLLAMA_HOST_URL/host.docker.internal/localhost}"
+    # Шлюз только для этого Mac: слушает 127.0.0.1, а ключ — постоянная заглушка, не секрет.
+    # Ключ из .env от локальных программ не защищал (они читают .env), от сети защищает адрес.
+    # Без мастер-ключа LiteLLM сверяет ключи с базой, которой нет, поэтому заглушка нужна.
+    # Ключ из .env остаётся для LiteLLM из docker-compose.
+    export LITELLM_MASTER_KEY="$GATEWAY_KEY"
     # Алиасы с пустым ключом в .env выпадают вместе со ссылками в fallbacks.
     "$VENV/bin/python" "$ROOT/scripts/gateway-config.py" "$ROOT/litellm/config.yaml" "$CONFIG"
-    nohup "$VENV/bin/litellm" --config "$CONFIG" --port "$PORT" >"$LOG" 2>&1 &
+    nohup "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "$PORT" >"$LOG" 2>&1 &
     echo $! >"$PID_FILE"
   )
   for _ in $(seq 1 60); do
-    running && { echo "Шлюз запущен: http://localhost:$PORT"; return; }
+    running && { echo "Шлюз запущен: http://127.0.0.1:$PORT"; return; }
     kill -0 "$(cat "$PID_FILE")" 2>/dev/null || break
     sleep 1
   done
@@ -77,7 +83,7 @@ case "${1:-}" in
   restart) stop_gateway; start ;;
   status)
     "$ROOT/scripts/ollama.sh" status | sed 's/^/Ollama: /' || true
-    running && echo "Шлюз: работает, http://localhost:$PORT" || { echo "Шлюз: не запущен"; exit 1; }
+    running && echo "Шлюз: работает, http://127.0.0.1:$PORT" || { echo "Шлюз: не запущен"; exit 1; }
     ;;
   logs) tail -f "$LOG" ;;
   *) echo "Использование: $0 start|stop|restart|status|logs" >&2; exit 2 ;;

@@ -59,7 +59,7 @@ SHALL падать на ту же модель у другого провайд�
 
 ### Requirement: OpenCode ходит через шлюз
 Провайдер `gateway` в OpenCode SHALL генерироваться `sync-agents.py` из `model_list`
-в `~/.config/opencode/opencode.json`, с `baseURL` шлюза и ключом `{env:LITELLM_MASTER_KEY}`.
+в `~/.config/opencode/opencode.json`, с `baseURL` шлюза и ключом-заглушкой шлюза.
 Модель по умолчанию SHALL браться из уровня `smart` в `agents/targets.json`.
 `scripts/oc.sh` SHALL поднимать шлюз, если он не запущен, и SHALL передавать OpenCode
 только ключи провайдеров моделей, а не весь `.env`.
@@ -114,3 +114,17 @@ fallback платного алиаса SHALL идти на прямой алиа
 - **WHEN** запускаются `gateway.sh start` и `sync-agents.py`
 - **THEN** `deepseek-coder-direct` нет ни в шлюзе, ни в OpenCode
 - **AND** цепочка `deepseek-coder-cloud` идёт сразу на локальную модель
+
+### Requirement: Шлюз только для этого Mac
+Шлюз SHALL слушать только `127.0.0.1`. Ключ нативного шлюза SHALL быть постоянной
+заглушкой `sk-local-gateway`, а не секретом из `.env`. Запросы SHALL приниматься в форматах
+Chat Completions и Responses.
+
+#### Scenario: Запрос из локальной сети
+- **WHEN** другая машина в сети обращается к порту шлюза по адресу этого Mac
+- **THEN** соединение не устанавливается
+
+#### Scenario: Приложение без доступа к .env
+- **GIVEN** Codex App запущен из Dock, без переменных из `.env`
+- **WHEN** он шлёт запрос в шлюз через провайдер `gateway`
+- **THEN** шлюз отвечает

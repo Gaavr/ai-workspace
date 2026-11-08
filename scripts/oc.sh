@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-ALLOWED=(OPENROUTER_API_KEY LITELLM_MASTER_KEY)
+ALLOWED=(OPENROUTER_API_KEY)
 
 for name in "${ALLOWED[@]}"; do
   value="$(

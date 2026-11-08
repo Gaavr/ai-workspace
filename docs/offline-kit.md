@@ -34,8 +34,7 @@ KIT="/Volumes/Samsung T7 Shield/Apps/AI/ai-workspace-kit"
    git clone "$KIT/repo/ai-workspace.bundle" ~/Projects/ai/ai-workspace
    cd ~/Projects/ai/ai-workspace
    ```
-2. Ключи: `cp .env.example .env` и заполнить из менеджера паролей.
-   `LITELLM_MASTER_KEY` — любой, например `sk-$(openssl rand -hex 24)`.
+2. Ключи: `cp .env.example .env` и заполнить ключи провайдеров из менеджера паролей.
 3. OpenCode:
    ```bash
    mkdir -p ~/.local/bin && cp "$KIT/opencode/bin/opencode" ~/.local/bin/
