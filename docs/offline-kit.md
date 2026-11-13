@@ -52,7 +52,7 @@ KIT="/Volumes/Samsung T7 Shield/Apps/AI/ai-workspace-kit"
    ```bash
    scripts/oc.sh
    ```
-   Без интернета модель одна — `gateway/gpt-oss-coder-local`, на неё и упадёт любая цепочка.
+   Без интернета модель одна — `gateway/ollama/gpt-oss-20b-ssd`, на неё и упадёт любая цепочка.
 
 ## Обновить и проверить
 

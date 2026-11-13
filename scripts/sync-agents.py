@@ -31,6 +31,8 @@ import re
 import shutil
 import sys
 
+from openrouter_catalog import catalog, is_wildcard
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 HOME = pathlib.Path.home()
 BUILD = ROOT / "build"
@@ -591,7 +593,9 @@ def sync_codex_config(active):
 
 
 def gateway_models(env, quiet=False):
-    """Алиасы из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info.
+    """Модели из litellm/config.yaml. PyYAML не нужен: берём model_name и лимиты из model_info.
+
+    openrouter/* разворачивается в каталог OpenRouter (scripts/openrouter_catalog.py), как у gateway-config.py.
 
     Алиас с пустым ключом (api_key: os.environ/VAR) пропускается — то же правило,
     что у scripts/gateway-config.py, на котором стартует шлюз.
@@ -606,6 +610,17 @@ def gateway_models(env, quiet=False):
         if key and not (os.environ.get(key.group(1)) or env.get(key.group(1))):
             if not quiet:
                 print(f"  gateway/{name}: выключен, в .env пусто: {key.group(1)}")
+            continue
+        target = re.search(r"^\s*model:\s*(\S+)", block, re.M)
+        if target and is_wildcard(name, target.group(1)):
+            found = catalog()
+            if found is None:
+                warn("openrouter/*: каталог OpenRouter недоступен и не сохранён, в OpenCode его моделей не будет")
+            for item in found or []:
+                model = {"name": item["id"], "tool_call": item["tools"]}
+                if item["context"] and item["output"]:  # OpenCode ждёт оба лимита
+                    model["limit"] = {"context": item["context"], "output": item["output"]}
+                models[item["id"]] = model
             continue
         model = {"name": name, "tool_call": True}
         limit = {}

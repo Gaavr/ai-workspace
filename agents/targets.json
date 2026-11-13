@@ -5,8 +5,8 @@
     "fast":  { "model": "haiku" }
   },
   "opencode": {
-    "smart": { "model": "gateway/nemotron-coder-cloud-free" },
-    "fast":  { "model": "gateway/glm-coder-cloud" }
+    "smart": { "model": "gateway/nvidia/nemotron-3-ultra-550b-a55b:free" },
+    "fast":  { "model": "gateway/z-ai/glm-5.3-flash" }
   },
   "codex": {
     "smart": { "model_reasoning_effort": "high" },

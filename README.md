@@ -4,7 +4,7 @@ Local AI environment with swappable model providers.
 
 ## Overview
 
-A LiteLLM gateway routes requests to cloud or local models under stable aliases. Switching providers means editing one YAML file. The gateway runs natively, no Docker: `scripts/gateway.sh`.
+A LiteLLM gateway routes requests to the whole OpenRouter catalog and a local model. Switching models means editing one YAML file. The gateway runs natively, no Docker: `scripts/gateway.sh`.
 
 Claude Code, Codex and OpenCode share skills, agents, global instructions and MCP servers. The repository holds one source for each, `scripts/sync-agents.py` lays it out into every tool's config.
 
@@ -69,7 +69,7 @@ scripts/ollama.sh ps                       # what is loaded and how much is on t
 scripts/ollama.sh stop gpt-oss-20b-ssd     # unload the model, the server keeps running
 ```
 
-`gpt-oss-coder-local` (gpt-oss-20b, 16k context) is the last link of every chain: it answers with no internet and no account. On a 16 GB Mac it is the ceiling: 12 GB of weights, 91% on the GPU, ~17 tokens/s, about 1 GB of RAM left. Agents call tools on it, but follow instructions weaker than cloud models.
+`ollama/gpt-oss-20b-ssd` (gpt-oss-20b, 16k context) is the last link of every chain: it answers with no internet and no account. On a 16 GB Mac it is the ceiling: 12 GB of weights, 91% on the GPU, ~17 tokens/s, about 1 GB of RAM left. Agents call tools on it, but follow instructions weaker than cloud models.
 
 Without the SSD the gateway still starts, prints that local models are unavailable, and the chain ends with a connection error.
 
@@ -103,7 +103,7 @@ Whole working folders with `.git`, uncommitted and untracked files, in the same 
 ai-workspace/
 ├── docker-compose.yml
 ├── litellm/
-│   ├── config.yaml          model aliases, fallback
+│   ├── config.yaml          models, fallback
 │   └── ollama/              Modelfiles for local models
 ├── prompts/                 Open WebUI personas
 ├── prompts.local/           personas, not in git
@@ -139,53 +139,43 @@ ai-workspace/
 `sync-agents.py` adds a `gateway` provider to its block in `~/.codex/config.toml` (Responses API, which LiteLLM translates for every model) and a profile per OpenCode tier from `agents/targets.json`:
 
 ```bash
-codex -p smart      # gateway/nemotron-coder-cloud-free, same model as smart agents in OpenCode
-codex -p fast       # gateway/glm-coder-cloud
+codex -p smart      # gateway/nvidia/nemotron-3-ultra-550b-a55b:free, same model as smart agents in OpenCode
+codex -p fast       # gateway/z-ai/glm-5.3-flash
 codex -p algo-coach # a persona, on the usual OpenAI model
 ```
 
 Change a tier's model in `targets.json`, run `sync-agents.py`, and Codex moves together with the OpenCode agents. Your own profiles in `~/.codex/` are left alone.
 
-## Model aliases
+## Models
 
-Personas and agents reference an alias, not a model:
+There are no aliases of our own. One line in `litellm/config.yaml` brings in the whole OpenRouter catalog:
 
 ```yaml
 model_list:
-  - model_name: nemotron-coder-cloud-free
+  - model_name: openrouter/*
     litellm_params:
-      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+      model: openrouter/*
       api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      max_input_tokens: 1000000
-      max_output_tokens: 32768
 ```
 
-Naming scheme: `model-role-location[-free]`. For example `nemotron-coder-cloud-free`, `glm-coder-cloud`, `qwen-coder-local`.
+LiteLLM cannot list a wildcard's models itself, so `scripts/gateway-config.py` expands `openrouter/*` from `https://openrouter.ai/api/v1/models` at every gateway start: each model gets its OpenRouter ID as the name (`nvidia/nemotron-3-ultra-550b-a55b:free`) and its context and output limits from the catalog. Offline, the last saved list in `build/litellm/openrouter-models.json` is used. The local model is named after its Ollama model, `ollama/gpt-oss-20b-ssd`.
 
-`sync-agents.py` builds OpenCode's `gateway` provider from `model_list`: every alias becomes `gateway/<alias>`, `model_info` gives the context limits. The default model and agent tiers come from `agents/targets.json`. Other providers and local Ollama models are in the file as commented templates.
+`sync-agents.py` expands the catalog the same way for OpenCode's `gateway` provider: every model becomes `gateway/<id>`. The default model and agent tiers come from `agents/targets.json`, personas name the model in `base:`.
 
-Replacing the model behind an alias requires no changes to personas or agents:
-
-```bash
-# change model: in litellm/config.yaml
-scripts/gateway.sh restart
-```
-
-Adding or removing an alias also needs `python3 scripts/sync-agents.py` and an OpenCode restart.
+A model appearing on OpenRouter shows up after a gateway restart, and in OpenCode after `python3 scripts/sync-agents.py` and an OpenCode restart.
 
 ## Fallback
 
 ```yaml
 router_settings:
   fallbacks:
-    - nemotron-coder-cloud-free: ["north-coder-cloud-free", "gpt-oss-coder-local"]
-    - glm-coder-cloud: ["glm-coder-zai", "gpt-oss-coder-local"]
+    - nvidia/nemotron-3-ultra-550b-a55b:free: ["cohere/north-mini-code:free", "ollama/gpt-oss-20b-ssd"]
+    - openrouter/*: ["ollama/gpt-oss-20b-ssd"]
 ```
 
-Paid aliases fall back to the same model at another provider: GLM via OpenRouter → GLM at z.ai, DeepSeek via OpenRouter → DeepSeek direct, then the local model. The direct aliases are pay-per-use API, not subscriptions. An alias whose `api_key` variable is empty in `.env` is switched off: `scripts/gateway-config.py` drops it and its fallback references before the gateway starts (`build/litellm/config.yaml`), `sync-agents.py` hides it in OpenCode. Fill in `ZAI_API_KEY` or `DEEPSEEK_API_KEY`, run `scripts/gateway.sh restart` and `sync-agents.py`, and it turns on.
+`openrouter/*` is the chain for every catalog model without its own. Free models fall back only to free ones and the local model, so a paid model never kicks in unasked. Every chain ends on the local model. Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter.
 
-Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter. Free aliases fall back only to free ones and the local model, so a paid model never kicks in unasked. Every chain ends on the local model.
+A model whose `api_key` variable is empty in `.env` is switched off: `scripts/gateway-config.py` drops it and its fallback references before the gateway starts (`build/litellm/config.yaml`), `sync-agents.py` hides it in OpenCode.
 
 ## Personas
 
@@ -195,7 +185,7 @@ A chat with a system prompt and a fixed model. File in `prompts/`:
 ---
 id: algo-coach
 name: Coding Challenge Coach
-base: nemotron-coder-cloud-free
+base: nvidia/nemotron-3-ultra-550b-a55b:free
 temperature: 0.3
 ---
 System prompt.

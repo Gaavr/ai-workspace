@@ -51,7 +51,7 @@ start() {
     # Без мастер-ключа LiteLLM сверяет ключи с базой, которой нет, поэтому заглушка нужна.
     # Ключ из .env остаётся для LiteLLM из docker-compose.
     export LITELLM_MASTER_KEY="$GATEWAY_KEY"
-    # Алиасы с пустым ключом в .env выпадают вместе со ссылками в fallbacks.
+    # Модели с пустым ключом в .env выпадают вместе со ссылками в fallbacks, openrouter/* разворачивается в каталог.
     "$VENV/bin/python" "$ROOT/scripts/gateway-config.py" "$ROOT/litellm/config.yaml" "$CONFIG"
     nohup "$VENV/bin/litellm" --config "$CONFIG" --host 127.0.0.1 --port "$PORT" >"$LOG" 2>&1 &
     echo $! >"$PID_FILE"

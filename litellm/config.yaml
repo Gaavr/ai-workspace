@@ -1,65 +1,19 @@
-# Единственное место с моделями. Алиас: модель-роль-где[-free].
-# sync-agents.py собирает из model_name и model_info список моделей gateway для OpenCode,
-# поэтому новый алиас появляется там после sync-agents.py и перезапуска шлюза.
+# Единственное место с моделями. Своих алиасов нет: облачные модели — весь каталог OpenRouter
+# под их ID, локальная — под именем модели в Ollama.
+# openrouter/* разворачивают scripts/gateway-config.py (конфиг шлюза) и sync-agents.py (OpenCode)
+# по списку https://openrouter.ai/api/v1/models, без сети — по последнему сохранённому.
 model_list:
-  # --- Бесплатные через OpenRouter. Пропадают без предупреждения, поэтому fallback ниже.
-  - model_name: nemotron-coder-cloud-free
+  # --- Весь каталог OpenRouter: модель вызывается по её ID, например nvidia/nemotron-3-ultra-550b-a55b:free.
+  # Бесплатные (:free) пропадают без предупреждения, поэтому fallback ниже.
+  - model_name: openrouter/*
     litellm_params:
-      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+      model: openrouter/*
       api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      max_input_tokens: 1000000
-      max_output_tokens: 32768
-
-  - model_name: north-coder-cloud-free
-    litellm_params:
-      model: openrouter/cohere/north-mini-code:free
-      api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      max_input_tokens: 256000
-      max_output_tokens: 32768
-
-  # --- Платные, но дешёвые: уровень fast, лёгкие задачи [лёгкая] из PROCESS.md. Вышла новая версия — меняется только model.
-  - model_name: glm-coder-cloud
-    litellm_params:
-      model: openrouter/z-ai/glm-5.3-flash
-      api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      max_input_tokens: 1048576
-      max_output_tokens: 32768
-
-  - model_name: deepseek-coder-cloud
-    litellm_params:
-      model: openrouter/deepseek/deepseek-v4.1-flash
-      api_key: os.environ/OPENROUTER_API_KEY
-    model_info:
-      max_input_tokens: 1048576
-      max_output_tokens: 32768
-
-  # --- Та же модель напрямую у автора: резерв, если OpenRouter недоступен.
-  # Без ключа в .env алиас выпадает (scripts/gateway-config.py, sync-agents.py), цепочка
-  # идёт сразу на локальную. Оплата за использование, не подписка.
-  # Имена моделей сверить с /models провайдера, когда появится ключ.
-  - model_name: glm-coder-zai
-    litellm_params:
-      model: zai/glm-5.3-flash
-      api_key: os.environ/ZAI_API_KEY
-    model_info:
-      max_input_tokens: 1048576
-      max_output_tokens: 32768
-
-  - model_name: deepseek-coder-direct
-    litellm_params:
-      model: deepseek/deepseek-v4-flash
-      api_key: os.environ/DEEPSEEK_API_KEY
-    model_info:
-      max_input_tokens: 1000000
-      max_output_tokens: 32768
 
   # --- Локально, без интернета: последнее звено всех цепочек.
   # Ollama с внешнего SSD (scripts/ollama.sh), модель — litellm/ollama/gpt-oss-20b.Modelfile.
   # На 16 ГБ потолок — модели ~12 ГБ, контекст 16 тыс.
-  - model_name: gpt-oss-coder-local
+  - model_name: ollama/gpt-oss-20b-ssd
     litellm_params:
       model: ollama_chat/gpt-oss-20b-ssd
       api_base: os.environ/OLLAMA_HOST_URL
@@ -70,15 +24,12 @@ model_list:
 
 router_settings:
   # Бесплатные падают только на бесплатные: платная модель без спроса не включается.
-  # Платные — на ту же модель у другого провайдера, не на другую платную.
   # Каждая цепочка кончается локальной моделью, она работает без интернета.
+  # openrouter/* — цепочка для всех моделей каталога, у которых нет своей.
   fallbacks:
-    - nemotron-coder-cloud-free: ["north-coder-cloud-free", "gpt-oss-coder-local"]
-    - north-coder-cloud-free: ["nemotron-coder-cloud-free", "gpt-oss-coder-local"]
-    - glm-coder-cloud: ["glm-coder-zai", "gpt-oss-coder-local"]
-    - deepseek-coder-cloud: ["deepseek-coder-direct", "gpt-oss-coder-local"]
-    - glm-coder-zai: ["gpt-oss-coder-local"]
-    - deepseek-coder-direct: ["gpt-oss-coder-local"]
+    - nvidia/nemotron-3-ultra-550b-a55b:free: ["cohere/north-mini-code:free", "ollama/gpt-oss-20b-ssd"]
+    - cohere/north-mini-code:free: ["nvidia/nemotron-3-ultra-550b-a55b:free", "ollama/gpt-oss-20b-ssd"]
+    - openrouter/*: ["ollama/gpt-oss-20b-ssd"]
   num_retries: 2
 
 litellm_settings:
