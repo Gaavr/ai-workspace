@@ -15,7 +15,7 @@
 - **GIVEN** SSD подключён
 - **WHEN** выполняется `scripts/gateway.sh start`
 - **THEN** поднимаются Ollama и шлюз
-- **AND** `gpt-oss-coder-local` отвечает через шлюз
+- **AND** `ollama/gpt-oss-20b-ssd` отвечает через шлюз
 
 #### Scenario: SSD не подключён
 - **GIVEN** тома SSD нет
@@ -25,10 +25,10 @@
 
 ### Requirement: Тестовая модель из того, что уже есть
 gpt-oss-20b SHALL импортироваться в Ollama из GGUF, уже лежащего на SSD, с контекстом
-не меньше 16 тыс. токенов. Модель SHALL вызывать инструменты.
+не меньше 16 тыс. токенов, под именем `gpt-oss-20b-ssd`. Модель SHALL вызывать инструменты.
 
 #### Scenario: Агент на локальной модели
-- **WHEN** выполняется `scripts/oc.sh run --agent lead -m gateway/gpt-oss-coder-local "…"`
+- **WHEN** выполняется `scripts/oc.sh run --agent lead -m gateway/ollama/gpt-oss-20b-ssd "…"`
 - **THEN** агент отвечает и может вызвать инструмент
 
 ### Requirement: Одна загруженная модель
