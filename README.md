@@ -170,12 +170,24 @@ A model appearing on OpenRouter shows up after a gateway restart, and in OpenCod
 router_settings:
   fallbacks:
     - nvidia/nemotron-3-ultra-550b-a55b:free: ["cohere/north-mini-code:free", "ollama/gpt-oss-20b-ssd"]
+    - z-ai/glm-5.3-flash: ["direct/zai/glm-5.3-flash", "ollama/gpt-oss-20b-ssd"]
     - openrouter/*: ["ollama/gpt-oss-20b-ssd"]
 ```
 
-`openrouter/*` is the chain for every catalog model without its own. Free models fall back only to free ones and the local model, so a paid model never kicks in unasked. Every chain ends on the local model. Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter.
+`openrouter/*` is the chain for every catalog model without its own. Free models fall back only to free ones and the local model, so a paid model never kicks in unasked. A paid model falls back to the same model at its author, then to the local one, never to another paid model. Every chain ends on the local model. Triggers on any provider error: exhausted rate limit, insufficient credits, revoked key, no network, a model removed from OpenRouter.
 
 A model whose `api_key` variable is empty in `.env` is switched off: `scripts/gateway-config.py` drops it and its fallback references before the gateway starts (`build/litellm/config.yaml`), `sync-agents.py` hides it in OpenCode.
+
+### Direct providers
+
+If the OpenRouter account is blocked or unpaid, every cloud model is gone at once. Two paid models therefore have a second route straight to their authors, on separate accounts:
+
+| Catalog model | Direct entry | Key in `.env` |
+|---|---|---|
+| `z-ai/glm-5.3-flash` | `direct/zai/glm-5.3-flash` | `ZAI_API_KEY` |
+| `deepseek/deepseek-v4-flash` | `direct/deepseek/deepseek-v4-flash` | `DEEPSEEK_API_KEY` |
+
+The `direct/` prefix keeps the name apart from the catalog ID: LiteLLM treats two entries with one name as one model and splits traffic between them instead of falling back. Limits of a direct entry are set by hand in `model_info`, the catalog does not cover it. While a key is empty the entry is switched off and the chain goes straight to the local model.
 
 ## Personas
 

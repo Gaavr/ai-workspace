@@ -10,6 +10,28 @@ model_list:
       model: openrouter/*
       api_key: os.environ/OPENROUTER_API_KEY
 
+  # --- Та же модель напрямую у автора: резерв, если OpenRouter недоступен или заблокировал аккаунт.
+  # Имя direct/<провайдер>/<ID>: без префикса deepseek/deepseek-v4-flash совпал бы с ID каталога,
+  # и LiteLLM делил бы запросы между провайдерами вместо fallback. Пустой ключ в .env — запись выключена.
+  # Лимиты — из таблицы LiteLLM для провайдера, каталог OpenRouter их не знает.
+  - model_name: direct/zai/glm-5.3-flash
+    litellm_params:
+      model: zai/glm-5.3-flash
+      api_key: os.environ/ZAI_API_KEY
+    model_info:
+      max_input_tokens: 1048576
+      max_output_tokens: 128000
+      supports_function_calling: true
+
+  - model_name: direct/deepseek/deepseek-v4-flash
+    litellm_params:
+      model: deepseek/deepseek-v4-flash
+      api_key: os.environ/DEEPSEEK_API_KEY
+    model_info:
+      max_input_tokens: 1000000
+      max_output_tokens: 393216
+      supports_function_calling: true
+
   # --- Локально, без интернета: последнее звено всех цепочек.
   # Ollama с внешнего SSD (scripts/ollama.sh), модель — litellm/ollama/gpt-oss-20b.Modelfile.
   # На 16 ГБ потолок — модели ~12 ГБ, контекст 16 тыс.
@@ -24,11 +46,14 @@ model_list:
 
 router_settings:
   # Бесплатные падают только на бесплатные: платная модель без спроса не включается.
+  # Платные падают на ту же модель у автора, не на другую платную.
   # Каждая цепочка кончается локальной моделью, она работает без интернета.
   # openrouter/* — цепочка для всех моделей каталога, у которых нет своей.
   fallbacks:
     - nvidia/nemotron-3-ultra-550b-a55b:free: ["cohere/north-mini-code:free", "ollama/gpt-oss-20b-ssd"]
     - cohere/north-mini-code:free: ["nvidia/nemotron-3-ultra-550b-a55b:free", "ollama/gpt-oss-20b-ssd"]
+    - z-ai/glm-5.3-flash: ["direct/zai/glm-5.3-flash", "ollama/gpt-oss-20b-ssd"]
+    - deepseek/deepseek-v4-flash: ["direct/deepseek/deepseek-v4-flash", "ollama/gpt-oss-20b-ssd"]
     - openrouter/*: ["ollama/gpt-oss-20b-ssd"]
   num_retries: 2
 

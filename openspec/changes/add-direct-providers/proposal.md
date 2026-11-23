@@ -1,6 +1,7 @@
 # Прямые провайдеры z.ai и DeepSeek
 
 Решение владельца 08.11.2026: подключить оба, как резерв той же модели.
+Переделано 24.11.2026 под каталог OpenRouter: своих алиасов в шлюзе больше нет.
 
 ## Why
 Сейчас весь облачный доступ идёт через один аккаунт OpenRouter. Заблокируют его или не пройдёт
@@ -8,22 +9,22 @@
 аккаунта у самих авторов моделей, в другой юрисдикции, чем OpenRouter.
 
 ## What Changes
-- Алиасы `glm-coder-zai` (`zai/glm-5.3-flash`) и `deepseek-coder-direct`
-  (`deepseek/deepseek-v4-flash`) в `litellm/config.yaml`, ключи `ZAI_API_KEY`
-  и `DEEPSEEK_API_KEY` в `.env`.
-- Платная цепочка — та же модель у другого провайдера, в конце локальная:
-  `glm-coder-cloud` → `glm-coder-zai` → `gpt-oss-coder-local`,
-  `deepseek-coder-cloud` → `deepseek-coder-direct` → `gpt-oss-coder-local`.
-  Перекрёстный fallback GLM ↔ DeepSeek убирается.
-- Алиас с пустым ключом в `.env` выпадает: шлюз стартует с отфильтрованным конфигом
-  `build/litellm/config.yaml`, `sync-agents.py` не показывает его в OpenCode.
-  Так же уже работает с MCP-серверами.
+- Записи `direct/zai/glm-5.3-flash` и `direct/deepseek/deepseek-v4-flash` в `litellm/config.yaml`
+  с `model_info`, ключи `ZAI_API_KEY` и `DEEPSEEK_API_KEY` из `.env`.
+- Своя цепочка у модели каталога — та же модель у автора, затем локальная:
+  `z-ai/glm-5.3-flash` → `direct/zai/glm-5.3-flash` → `ollama/gpt-oss-20b-ssd`,
+  `deepseek/deepseek-v4-flash` → `direct/deepseek/deepseek-v4-flash` → `ollama/gpt-oss-20b-ssd`.
+  Она заменяет для этих двух моделей общую цепочку `openrouter/*`.
+- Платная модель падает на ту же модель у другого провайдера или на локальную,
+  но не на другую платную модель.
+- Запись без ключа в `.env` выпадает из шлюза и OpenCode по уже действующему правилу
+  «Модель без ключа выпадает»: пока ключей нет, цепочки идут сразу на локальную модель.
 
 ## Out of scope
 - Регистрация, пополнение счёта и получение ключей — делает владелец.
 - Подписка z.ai GLM Coding Plan и её Anthropic-совместимый вход для Claude Code.
+- Прямые провайдеры для других моделей каталога: добавляются так же, отдельным решением.
 
 ## Impact
-`litellm/config.yaml`, `.env.example`, `scripts/gateway.sh`, `scripts/sync-agents.py`,
-`README.md`, дельта `model-gateway`. Звено `gpt-oss-coder-local` приходит из `add-local-models`:
-до него цепочки кончаются на прямом провайдере.
+`litellm/config.yaml`, `README.md`, дельта `model-gateway`. Фильтр записей без ключа
+(`scripts/gateway-config.py`, `sync-agents.py`) и `.env.example` уже готовы.
